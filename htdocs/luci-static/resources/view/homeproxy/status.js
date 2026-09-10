@@ -31,6 +31,71 @@ const css = '				\
 
 const hp_dir = '/var/run/homeproxy';
 
+let nativeAPILoad;
+function loadNativeAPI() {
+	if (window.HomeProxyAPI) return Promise.resolve();
+	if (!nativeAPILoad) nativeAPILoad = new Promise((resolve, reject) => {
+		const script = document.createElement('script');
+		script.src = L.resource('homeproxy-api.js') + '?v=20260910-stream1';
+		script.onload = resolve;
+		script.onerror = () => { nativeAPILoad = null; script.remove(); reject(new Error(_('Cannot load API client'))); };
+		document.head.appendChild(script);
+	});
+	return nativeAPILoad;
+}
+
+function getUDPConnStat(o) {
+	const getRuntime = rpc.declare({ object: 'luci.homeproxy', method: 'runtime', params: ['instance'], expect: { '': {} } });
+	const result = E('strong', { role: 'status', 'aria-live': 'polite' }, _('unchecked'));
+	const server = 'stun.cloudflare.com:3478';
+	let controller;
+	const check = E('button', { type: 'button', class: 'btn cbi-button cbi-button-action', click: ui.createHandlerFn(this, async () => {
+		if (controller) { controller.abort(); return; }
+		controller = new AbortController();
+		check.textContent = _('Cancel');
+		result.textContent = _('Checking…'); result.style.color = '';
+		result.title = '';
+		let timedOut = false, received = false;
+		const timer = setTimeout(() => { timedOut = true; controller?.abort(); }, 25000);
+		const abort = () => controller?.abort();
+		const hidden = () => { if (document.hidden) abort(); };
+		window.addEventListener('pagehide', abort);
+		document.addEventListener('visibilitychange', hidden);
+		const observer = new MutationObserver(() => { if (!result.isConnected) abort(); });
+		observer.observe(document.body, { childList: true, subtree: true });
+		try {
+			const [, runtime] = await Promise.all([loadNativeAPI(), getRuntime('client')]);
+			if (controller.signal.aborted) throw new Error('cancelled');
+			if (!runtime.running || !runtime.compatible || !runtime.api?.enabled || !runtime.udp_outbound)
+				throw new Error(_('Start the paired core with API enabled first.'));
+			const client = new window.HomeProxyAPI.Client('client');
+			const version = await client.call('GetVersion', {}, controller.signal);
+			if (version.version !== runtime.expected || version.apiVersion !== runtime.api_version)
+				throw new Error(_('Core/API version is outside the supported pairing.'));
+			for await (const message of client.stream('StartSTUNTest', { server, outboundTag: runtime.udp_outbound }, controller.signal)) {
+				if (message.externalAddr) {
+					received = true;
+					result.textContent = _('passed');
+					result.title = message.latencyMs + ' ms';
+					result.style.color = 'green';
+					break; // Binding response proves UDP return traffic; NAT classification is separate.
+				}
+				if (message.error) throw new Error(message.error);
+			}
+			if (!received) throw new Error(_('No valid STUN response received.'));
+		} catch (error) {
+			result.style.color = 'red';
+			result.textContent = timedOut ? _('Timed out') : controller.signal.aborted ? _('Cancelled') : _('failed');
+			if (!controller.signal.aborted) result.title = error.message;
+		} finally {
+			clearTimeout(timer); controller.abort(); controller = null;
+			observer.disconnect(); window.removeEventListener('pagehide', abort); document.removeEventListener('visibilitychange', hidden);
+			check.textContent = _('Check');
+		}
+	}) }, _('Check'));
+	o.default = E('div', {}, [check, ' ', result]);
+}
+
 function getConnStat(o, site) {
 	const callConnStat = rpc.declare({
 		object: 'luci.homeproxy',
@@ -116,51 +181,6 @@ function getResVersion(o, type) {
 function getRuntimeLog(o, name, _option_index, section_id, _in_table) {
 	const filename = o.option.split('_')[1];
 
-	let section, log_level_el;
-	switch (filename) {
-	case 'homeproxy':
-		section = null;
-		break;
-	case 'sing-box-c':
-		section = 'config';
-		break;
-	case 'sing-box-s':
-		section = 'server';
-		break;
-	}
-
-	if (section) {
-		const selected = uci.get('homeproxy', section, 'log_level') || 'warn';
-		const choices = {
-			trace: _('Trace'),
-			debug: _('Debug'),
-			info: _('Info'),
-			warn: _('Warn'),
-			error: _('Error'),
-			fatal: _('Fatal'),
-			panic: _('Panic')
-		};
-
-		log_level_el = E('select', {
-			'id': o.cbid(section_id),
-			'class': 'cbi-input-select',
-			'style': 'margin-left: 4px; width: 6em;',
-			'change': ui.createHandlerFn(this, (ev) => {
-				uci.set('homeproxy', section, 'log_level', ev.target.value);
-				return o.map.save(null, true).then(() => {
-					ui.changes.apply(true);
-				});
-			})
-		});
-
-		Object.keys(choices).forEach((v) => {
-			log_level_el.appendChild(E('option', {
-				'value': v,
-				'selected': (v === selected) ? '' : null
-			}, [ choices[v] ]));
-		});
-	}
-
 	const callLogClean = rpc.declare({
 		object: 'luci.homeproxy',
 		method: 'log_clean',
@@ -204,7 +224,6 @@ function getRuntimeLog(o, name, _option_index, section_id, _in_table) {
 		E('div', {'class': 'cbi-map'}, [
 			E('h3', {'name': 'content', 'style': 'align-items: center; display: flex;'}, [
 				_('%s log').format(name),
-				log_level_el || '',
 				E('button', {
 					'class': 'btn cbi-button cbi-button-action',
 					'style': 'margin-left: 4px;',
@@ -232,11 +251,14 @@ return view.extend({
 		s = m.section(form.NamedSection, 'config', 'homeproxy', _('Connection check'));
 		s.anonymous = true;
 
-		o = s.option(form.DummyValue, '_check_baidu', _('BaiDu'));
+		o = s.option(form.DummyValue, '_check_baidu', _('BaiDu') + ' (HTTPS/TCP)');
 		o.cfgvalue = L.bind(getConnStat, this, o, 'baidu');
 
-		o = s.option(form.DummyValue, '_check_google', _('Google'));
+		o = s.option(form.DummyValue, '_check_google', _('Google') + ' (HTTPS/TCP)');
 		o.cfgvalue = L.bind(getConnStat, this, o, 'google');
+
+		o = s.option(form.DummyValue, '_check_udp', 'UDP (STUN)');
+		o.cfgvalue = L.bind(getUDPConnStat, this, o);
 
 		s = m.section(form.NamedSection, 'config', 'homeproxy', _('Resources management'));
 		s.anonymous = true;
@@ -281,11 +303,6 @@ return view.extend({
 		o = s.option(form.DummyValue, '_homeproxy_logview');
 		o.render = L.bind(getRuntimeLog, this, o, _('HomeProxy'));
 
-		o = s.option(form.DummyValue, '_sing-box-c_logview');
-		o.render = L.bind(getRuntimeLog, this, o, _('sing-box client'));
-
-		o = s.option(form.DummyValue, '_sing-box-s_logview');
-		o.render = L.bind(getRuntimeLog, this, o, _('sing-box server'));
 
 		return m.render();
 	},

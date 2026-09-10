@@ -14,6 +14,38 @@
 'require homeproxy as hp';
 'require tools.widgets as widgets';
 
+// Shared by individual deletion and subscription bulk removal.
+function nodeReferences(sections, deleted) {
+ const removing = new Set(deleted);
+ const fields = {
+  homeproxy: ['main_node','main_udp_node','main_urltest_nodes','main_udp_urltest_nodes','default_outbound'],
+  node: ['group_nodes','group_default','node_detour','local_detour','node_base'],
+  routing_node: ['node','outbound','urltest_nodes'],
+  routing_rule: ['outbound'], dns_server: ['outbound'], dns_rule: ['outbound'], ruleset: ['outbound']
+ };
+ const references = [];
+ for (const section of sections) {
+  if (removing.has(section['.name'])) continue;
+  for (const field of fields[section['.type']] || []) {
+   const value = section[field];
+   for (const id of Array.isArray(value) ? value : [value]) {
+    if (removing.has(id)) references.push(`${section.label || section['.name']} · ${field}`);
+   }
+  }
+ }
+ return [...new Set(references)];
+}
+
+function removeNode(section_id, ev) {
+	if (this.map.readonly) return;
+	const references = nodeReferences(uci.sections(this.uciconfig || this.map.config), [section_id]);
+	if (references.length) {
+		ui.addNotification(null, E('p', {}, _('These nodes are still referenced. Update these settings before removing them:') + ' ' + references.join('; ')), 'error');
+		return;
+	}
+	return form.GridSection.prototype.handleRemove.call(this, section_id, ev);
+}
+
 function allowInsecureConfirm(ev, _section_id, value) {
 	if (value === '1' && !confirm(_('Are you sure to allow insecure?')))
 		ev.target.firstElementChild.checked = null;
@@ -390,6 +422,7 @@ function parseShareLink(uri, features) {
 
 function renderNodeSettings(section, data, features, main_node, routing_mode) {
 	let s = section, o;
+	s.handleRemove = removeNode;
 	s.rowcolors = true;
 	s.sortable = true;
 	s.nodescriptions = true;
@@ -421,10 +454,98 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 
 	o = s.option(form.Value, 'label', _('Label'));
 	o.load = L.bind(hp.loadDefaultLabel, this, data[0]);
-	o.validate = L.bind(hp.validateUniqueValue, this, data[0], 'node', 'label');
+	// Display labels may repeat; internal node IDs are the identity.
 	o.modalonly = true;
 
+	const nodeName = id => {
+		const n=uci.get(data[0],id);if(!n)return _('Missing node (%s)').format(id || '—');
+		let origin='';try{if(n.source_id)origin=new URL(uci.get(data[0],n.source_id,'url')).hostname;}catch(e){}
+		return (n.label || id)+(origin?' — '+origin:'');
+	};
+	function nodeValidation(sid) {
+		const current=this.section;
+		const get=(id,key)=>{
+			if(id===sid){const option=current.children.find(o=>o.option===key);const value=option?.formvalue(sid);if(value!==null && value!==undefined)return value;}
+			return uci.get(data[0],id,key);
+		};
+		function effective(id,path=[]){
+			if(path.includes(id))throw new Error(_('Circular node dependency: %s').format([...path,id].map(nodeName).join(' → ')));
+			if(id!==sid && !uci.get(data[0],id))throw new Error(_('Missing node (%s)').format(id));
+			let result={type:get(id,'type'),detour:get(id,'node_detour'),members:get(id,'group_nodes') || [],default:get(id,'group_default')};
+			if(get(id,'node_mode')==='reference'){
+				const base=get(id,'node_base');if(!base)throw new Error(_('Select a base node.'));
+				result=effective(base,[...path,id]);
+				if(['selector','urltest','tailscale','wireguard'].includes(result.type))throw new Error(_('Choose a proxy node as the base, not a group or endpoint.'));
+			}
+			const override=get(id,'local_detour');if(override)result={...result,detour:override==='_direct'?null:override};
+			return result;
+		}
+		function visit(id,path=[]){
+			if(path.includes(id))throw new Error(_('Circular node dependency: %s').format([...path,id].map(nodeName).join(' → ')));
+			const n=effective(id);
+			if(['selector','urltest'].includes(n.type)){
+				if(!n.members.length)throw new Error(_('Group must contain at least one member.'));
+				if(n.default && !n.members.includes(n.default))throw new Error(_('Default must be a group member.'));
+			}
+			for(const dep of [...n.members,...(n.detour?[n.detour]:[])])visit(dep,[...path,id]);
+		}
+		try{visit(sid);return true;}catch(e){return e.message;}
+	}
+	o=s.option(form.ListValue,'node_mode',_('Creation method'));
+	o.value('manual',_('Configure directly'));o.value('reference',_('Reference an existing node'));o.default='manual';o.rmempty=false;o.modalonly=true;
+	o.renderWidget=function(sid,index,value){
+		if(uci.get(data[0],sid,'grouphash')){this.keylist=['manual'];this.vallist=[_('Configure directly')];}
+		else {this.keylist=['manual','reference'];this.vallist=[_('Configure directly'),_('Reference an existing node')];}
+		return form.ListValue.prototype.renderWidget.call(this,sid,index,value);
+	};
+	o.onchange=function(ev,sid,mode){
+		const base=this.section.children.find(f=>f.option==='node_base')?.formvalue(sid);
+		const info=document.getElementById('hp-base-info-'+sid);if(info)info.textContent=baseInfo(base);
+		const upstream=document.getElementById('hp-original-upstream-'+sid);
+		if(upstream)upstream.textContent=mode==='reference'?inheritedUpstream(base):uci.get(data[0],sid,'node_detour')?nodeName(uci.get(data[0],sid,'node_detour')):_('Connect directly');
+	};
+	o=s.option(form.ListValue,'node_base',_('Base node'),_('Inherit server, authentication, TLS and transport settings. Local overrides are kept separately.'));
+	o.depends('node_mode','reference');o.rmempty=false;o.modalonly=true;
+	o.load=function(sid){this.keylist=[];this.vallist=[];this.value('',_('Select a base node.'));uci.sections(data[0],'node',n=>{if(n['.name']!==sid && !['selector','urltest','tailscale','wireguard'].includes(n.type))this.value(n['.name'],nodeName(n['.name']));});return this.super('load',sid);};
+	o.validate=nodeValidation;
+	o.onchange=(ev,sid,id)=>{const target=document.getElementById('hp-base-info-'+sid);if(target)target.textContent=baseInfo(id);const upstream=document.getElementById('hp-original-upstream-'+sid);if(upstream)upstream.textContent=inheritedUpstream(id);};
+	function inheritedUpstream(id,seen=[]){
+		if(!id)return _('Select a base node.');
+		if(seen.includes(id))return _('Circular node dependency: %s').format(nodeName(id));
+		const n=uci.get(data[0],id);if(!n)return _('Missing node (%s)').format(id);
+		if(n.local_detour)return n.local_detour==='_direct'?_('Connect directly'):nodeName(n.local_detour);
+		if(n.node_mode==='reference')return inheritedUpstream(n.node_base,[...seen,id]);
+		return n.node_detour?nodeName(n.node_detour):_('Connect directly');
+	}
+	function baseInfo(id,seen=[]){
+		if(!id)return _('Select a base node.');
+		if(seen.includes(id))return _('Circular node dependency: %s').format(nodeName(id));
+		const n=uci.get(data[0],id);if(!n)return _('Missing node (%s)').format(id);
+		if(n.node_mode==='reference')return baseInfo(n.node_base,[...seen,id]);
+		return (n.type || '—')+' · '+(n.address || '—')+(n.port?':'+n.port:'');
+	}
+	o=s.option(form.DummyValue,'_base_info',_('Inherited configuration'));
+	o.depends('node_mode','reference');o.modalonly=true;
+	o.description=_('Protocol-specific fields follow the base node. Edit that node to change them; this entry only overrides how it is reached.');
+	o.renderWidget=(sid)=>E('span',{id:'hp-base-info-'+sid},baseInfo(uci.get(data[0],sid,'node_base')));
+	o=s.option(form.ListValue,'local_detour',_('Upstream outbound'),_('Connect to this proxy through the selected outbound. An empty override inherits the original setting; direct connection clears an inherited upstream.'));
+	o.value('',_('Inherit original setting'));o.value('_direct',_('Connect directly'));
+	o.load=function(sid){this.keylist=[];this.vallist=[];this.value('',_('Inherit original setting'));this.value('_direct',_('Connect directly'));uci.sections(data[0],'node',n=>{if(n['.name']!==sid)this.value(n['.name'],nodeName(n['.name']));});return this.super('load',sid);};
+	o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});o.modalonly=true;o.validate=nodeValidation;o.retain=true;
+	o=s.option(form.DummyValue,'_upstream_original',_('Original upstream'));
+	o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});o.modalonly=true;
+	o.renderWidget=sid=>{const n=uci.get(data[0],sid) || {};return E('span',{id:'hp-original-upstream-'+sid},n.node_mode==='reference'?inheritedUpstream(n.node_base):n.node_detour?nodeName(n.node_detour):_('Connect directly'));};
+	o=s.option(widgets.DeviceSelect,'local_bind_interface',_('Override interface'),_('Used for a direct connection to the proxy server. Leave empty to inherit. Dial fields such as interface binding are ignored when an upstream is set.'));
+	o.multiple=false;o.noaliases=true;o.modalonly=true;o.retain=true;o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
+	o=s.option(form.ListValue,'local_domain_resolver',_('Override server address resolver'),_('Custom DNS servers are available only in custom routing mode. An unavailable resolver prevents applying the configuration.'));
+	o.value('',_('Inherit original setting'));o.value('_default',_('Use routing default'));o.value('default-dns',_('Default DNS (issued by WAN)'));o.value('system-dns',_('System DNS'));
+	if(routing_mode==='custom')uci.sections(data[0],'dns_server',n=>{if(n.enabled==='1')o.value(n['.name'],n.label || n['.name']);});
+	o.modalonly=true;o.retain=true;o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
+	o=s.option(form.ListValue,'local_domain_strategy',_('Override address strategy'));
+	o.value('',_('Inherit original setting'));o.value('_default',_('Use routing default'));for(const key in hp.dns_strategy)if(key)o.value(key,hp.dns_strategy[key]);
+	o.modalonly=true;o.retain=true;o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
 	o = s.option(form.ListValue, 'type', _('Type'));
+	o.textvalue=function(sid){return uci.get(data[0],sid,'node_mode')==='reference'?_('Reference'):form.ListValue.prototype.textvalue.call(this,sid);};
 	o.value('direct', _('Direct'));
 	o.value('anytls', _('AnyTLS'));
 	o.value('http', _('HTTP'));
@@ -441,18 +562,21 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 		o.value('tuic', _('Tuic'));
 	if (features.with_wireguard && features.with_gvisor)
 		o.value('wireguard', _('WireGuard'));
+	if (features.with_tailscale) o.value('tailscale', _('Tailscale'));
+	o.value('selector', _('Selector group'));
+	o.value('urltest', _('Automatic selection group'));
 	o.value('vless', _('VLESS'));
 	o.value('vmess', _('VMess'));
 	o.rmempty = false;
 
 	o = s.option(form.Value, 'address', _('Address'));
 	o.datatype = 'host';
-	o.depends({'type': 'direct', '!reverse': true});
+	o.depends({type:/^(?!direct$|tailscale$|selector$|urltest$).+/});
 	o.rmempty = false;
 
 	o = s.option(form.Value, 'port', _('Port'));
 	o.datatype = 'port';
-	o.depends({'type': 'direct', '!reverse': true});
+	o.depends({type:/^(?!direct$|tailscale$|selector$|urltest$).+/});
 	o.rmempty = false;
 
 	o = s.option(form.Value, 'username', _('Username'));
@@ -502,6 +626,102 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 	o.depends('type', 'direct');
 	o.modalonly = true;
 
+
+	// Both imported and manually created groups use the same node editor.
+	const groupLabel = id => {
+		if (!id) return _('No members');
+		const n=uci.get(data[0],id);
+		if(!n)return _('Missing node (%s)').format(id);
+		let origin='';
+		if(n.source_id){try {origin=new URL(uci.get(data[0],n.source_id,'url')).hostname;}catch(e){}}
+		return (n.label || id)+(origin?' — '+origin:'');
+	};
+	const membersOption=s.option(form.DynamicList,'group_nodes',_('Group members'),
+		_('Select existing nodes or groups. Nested groups are supported; self references and dependency cycles are not allowed.'));
+	membersOption.depends('type','selector');membersOption.depends('type','urltest');membersOption.modalonly=true;
+	membersOption.load=function(sid){
+		delete this.keylist;delete this.vallist;
+		uci.sections(data[0],'node',n=>{if(n['.name']!==sid)this.value(n['.name'],groupLabel(n['.name']));});
+		return this.super('load',sid);
+	};
+	const defaultOption=s.option(form.ListValue,'group_default',_('Default group member'),
+		_('Initial selection when the core starts. Runtime switching is available in Dashboard; the first member is used when unset.'));
+	defaultOption.depends('type','selector');defaultOption.modalonly=true;
+	function choices(sid,members,update,target=defaultOption){
+		const current=update?target.formvalue(sid):uci.get(data[0],sid,'group_default');
+		target.keylist=[];target.vallist=[];
+		target.value('',_('First member'));
+		for(const id of members)target.value(id,groupLabel(id));
+		if(current && !members.includes(current))target.value(current,_('Not in this group (%s)').format(groupLabel(current)));
+		if(update){
+			const select=document.getElementById('widget.'+target.cbid(sid));
+			if(select){select.replaceChildren(...target.keylist.map((v,i)=>E('option',{value:v},target.vallist[i])));select.value=current || '';}
+		}
+	}
+	defaultOption.renderWidget=function(sid,index,value){choices(sid,uci.get(data[0],sid,'group_nodes') || [],false,this);return form.ListValue.prototype.renderWidget.call(this,sid,index,value);};
+	defaultOption.validate=(sid,v)=>!v || (membersOption.formvalue(sid) || []).includes(v) || _('Default must be a group member.');
+	membersOption.onchange=(ev,sid,values)=>choices(sid,Array.isArray(values)?values:membersOption.formvalue(sid) || [],true);
+	for(const [field,label,hint,placeholder] of [
+	 ['url',_('Test URL'),_('HTTP URL requested through each member to compare latency.'),'https://www.gstatic.com/generate_204'],
+	 ['interval',_('Test interval (seconds)'),_('Interval between automatic latency checks. Empty uses the core default.'),'180'],
+	 ['tolerance',_('Tolerance (milliseconds)'),_('Latency difference tolerated before switching to a faster member. Empty uses the core default.'),'50'],
+	 ['idle_timeout',_('Idle timeout (seconds)'),_('Pause periodic checks after the group is idle. Empty uses the core default.'),'1800']
+	]){
+	 o=s.option(form.Value,'group_'+field,label,hint);o.depends('type','urltest');o.modalonly=true;o.placeholder=placeholder;if(field!=='url')o.datatype='uinteger';
+	}
+	o=s.option(form.Flag,'group_interrupt_exist_connections',_('Interrupt existing connections on switch'),
+		_('When enabled, switching members interrupts existing connections as well as affecting new connections.'));
+	o.depends('type','selector');o.depends('type','urltest');o.modalonly=true;
+
+	/* Tailscale endpoint fields, pinned to sing-box 1.14.0. */
+	for (const [field,label,hint] of [
+	 ['auth_key',_('Tailscale auth key'),_('Optional for first login. Without a key, obtain the login URL from core logs or the Dashboard Tailscale tools. Existing state is reused.')],
+	 ['hostname',_('Tailscale hostname'),_('Name advertised to the tailnet. Empty uses the system hostname.')],
+	 ['control_url',_('Tailscale control URL'),_('Empty uses the official coordination server. Set an HTTPS URL for another compatible control server.')],
+	 ['exit_node',_('Tailscale exit node'),_('Name or IP of the exit node. Without an exit node this endpoint provides tailnet access, not a general Internet proxy.')],
+	 ['state_directory',_('Tailscale state directory'),_('Empty uses a private persistent directory per node under /etc/homeproxy/tailscale/. Keep it to preserve device identity across restarts.')],
+	 ['taildrop_directory',_('Taildrop directory'),_('Empty uses a Taildrop subdirectory of this node’s state directory. Received files consume router storage; choose external storage for large files.')],
+	 ['system_interface_name',_('Tailscale interface name'),_('Optional name for the system TUN interface. Avoid names already used by HomeProxy or other services.')]
+	]) {
+	 o=s.option(form.Value,'tailscale_'+field,label,hint);o.depends('type','tailscale');o.modalonly=true;
+	 if(field==='auth_key')o.password=true;
+	 if(field==='control_url')o.validate=(sid,value)=>!value || /^https:\/\/[^\s]+$/.test(value) || _('Use an HTTPS URL.');
+	 if(field.endsWith('directory'))o.validate=(sid,value)=>!value || (value.startsWith('/') && !/[\r\n]/.test(value)) || _('Use an absolute directory path.');
+	}
+	for (const [field,label,hint] of [
+	 ['ephemeral',_('Ephemeral Tailscale device'),_('Register a temporary device rather than a permanent tailnet member.')],
+	 ['accept_routes',_('Accept tailnet routes'),_('Accept subnet routes advertised by other tailnet devices.')],
+	 ['exit_node_allow_lan_access',_('Allow LAN access with exit node'),_('Allow locally accessible subnets to bypass the exit node. Availability also depends on advertised routes.')],
+	 ['advertise_exit_node',_('Advertise as exit node'),_('Offer this device as an exit node. Approval and access policy are managed in the Tailscale administration console.')],
+	 ['system_interface',_('Create Tailscale system interface'),_('Create an additional system TUN interface. This is separate from HomeProxy traffic interception and requires kmod-tun.')],
+	 ['ssh_server',_('Enable Tailscale SSH'),_('Serve SSH on tailnet port 22 using local system accounts and Tailscale SSH access policies.')],
+	 ['ssh_disable_pty',_('Disable SSH PTY'),_('Refuse terminal allocation for Tailscale SSH.')],
+	 ['ssh_disable_sftp',_('Disable SSH SFTP'),_('Refuse SFTP over Tailscale SSH.')],
+	 ['ssh_disable_forwarding',_('Disable SSH forwarding'),_('Refuse TCP, Unix-socket and agent forwarding over Tailscale SSH.')]
+	]) {o=s.option(form.Flag,'tailscale_'+field,label,hint);o.default='0';o.modalonly=true;o.depends(field.startsWith('ssh_disable')?{type:'tailscale',tailscale_ssh_server:'1'}:{type:'tailscale'});}
+	for(const [field,label,datatype] of [
+	 ['advertise_routes',_('Advertised tailnet subnets'),'cidr'],['advertise_tags',_('Advertised Tailscale tags'),'string'],['relay_server_static_endpoints',_('Relay static endpoints'),'ipaddrport(1)']
+	]) {o=s.option(form.DynamicList,'tailscale_'+field,label);o.depends('type','tailscale');o.modalonly=true;o.datatype=datatype;}
+	for(const [field,label,hint,datatype] of [
+	 ['listen_port',_('Tailscale UDP port'),_('Empty or 0 selects an automatic peer-to-peer UDP port.'),'range(0,65535)'],
+	 ['relay_server_port',_('Tailscale relay port'),_('Optional UDP port for peer relay connections. Leave empty to retain the default.'),'range(0,65535)'],
+	 ['system_interface_mtu',_('Tailscale interface MTU'),_('Empty uses the Tailscale default MTU.'),'uinteger'],
+	 ['udp_timeout',_('Tailscale UDP idle timeout'),_('Seconds. Empty uses 300 seconds.'),'uinteger']
+	]) {o=s.option(form.Value,'tailscale_'+field,label,hint);o.depends('type','tailscale');o.modalonly=true;o.datatype=datatype;}
+
+	/* Hysteria2 1.14 options */
+	o = s.option(form.Flag, 'hysteria_disable_chrome_parrot', _('Disable Chrome QUIC handshake'),
+		_('Enable for Hysteria2 servers with Ed25519 certificates or to retain the older handshake behavior.'));
+	o.depends('type', 'hysteria2');
+	o.modalonly = true;
+	o = s.option(form.ListValue, 'hysteria_bbr_profile', _('Hysteria2 BBR profile'));
+	for (let profile of ['standard', 'conservative', 'aggressive']) o.value(profile);
+	o.depends('type', 'hysteria2');
+	o.modalonly = true;
+	o = s.option(form.Value, 'hysteria_hop_interval_max', _('Maximum hop interval (seconds)'));
+	o.datatype = 'uinteger';
+	o.depends('type', 'hysteria2');
+	o.modalonly = true;
 	/* AnyTLS config start */
 	o = s.option(form.Value, 'anytls_idle_session_check_interval', _('Idle session check interval'),
 		_('Interval checking for idle sessions, in seconds.'));
@@ -567,8 +787,16 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 	o = s.option(form.ListValue, 'hysteria_obfs_type', _('Obfuscate type'));
 	o.value('', _('Disable'));
 	o.value('salamander', _('Salamander'));
+	o.value('gecko', _('Gecko'));
 	o.depends('type', 'hysteria2');
 	o.modalonly = true;
+
+	for (let [field, label] of [['hysteria_obfs_min_packet_size', _('Minimum obfuscation packet size')], ['hysteria_obfs_max_packet_size', _('Maximum obfuscation packet size')]]) {
+		o = s.option(form.Value, field, label);
+		o.datatype = 'uinteger';
+		o.depends({type: 'hysteria2', hysteria_obfs_type: 'gecko'});
+		o.modalonly = true;
+	}
 
 	o = s.option(form.Value, 'hysteria_obfs_password', _('Obfuscate password'));
 	o.password = true;
@@ -1045,6 +1273,11 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 	o.onchange = allowInsecureConfirm;
 	o.modalonly = true;
 
+	o = s.option(form.Value, 'tls_handshake_timeout', _('TLS handshake timeout (seconds)'));
+	o.datatype = 'uinteger';
+	o.depends('tls', '1');
+	o = s.option(form.DynamicList, 'tls_certificate_public_key_sha256', _('Pinned certificate public key SHA256'));
+	o.depends('tls', '1');
 	o = s.option(form.ListValue, 'tls_min_version', _('Minimum TLS version'),
 		_('The minimum TLS version that is acceptable.'));
 	o.value('', _('default'));
@@ -1181,7 +1414,42 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 	o.depends('udp_over_tcp', '1');
 	o.modalonly = true;
 	/* Extra settings end */
-
+	// Direct configuration starts with protocol fields. Dial overrides are advanced.
+	o=s.option(form.Flag,'_dial_advanced',_('Advanced connection settings'));
+	o.modalonly=true;o.default='0';o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
+	o.cfgvalue=sid=>['local_detour','local_bind_interface','local_domain_resolver','local_domain_strategy'].some(k=>uci.get(data[0],sid,k))?'1':'0';
+	o.write=()=>{};o.remove=()=>{};
+	for(const field of s.children) if(field.option.startsWith('local_') || field.option==='_upstream_original') {
+		for(const dep of field.deps || [])if(dep.node_mode==='manual')dep._dial_advanced='1';
+	}
+	const first=['_apply','label','node_mode','type','node_base','_base_info'];
+	const last=['_dial_advanced','local_detour','_upstream_original','local_bind_interface','local_domain_resolver','local_domain_strategy'];
+	const byName=new Map(s.children.map(field=>[field.option,field]));
+	s.children=[...first.map(k=>byName.get(k)).filter(Boolean),...s.children.filter(field=>!first.includes(field.option) && !last.includes(field.option)),...last.map(k=>byName.get(k)).filter(Boolean)];
+	// References expose only inheritance and override controls, not duplicate credentials.
+	for(const field of s.children){
+		if(!['type','_apply'].includes(field.option))field.modalonly=true;
+		if(!['label','node_mode','node_base','_base_info','_upstream_original','_apply','_dial_advanced'].includes(field.option) && !field.option.startsWith('local_')){
+			if(field.deps?.length)for(const dep of field.deps)dep.node_mode='manual';else field.depends('node_mode','manual');
+			field.retain=true;
+			if(['tcp_fast_open','tcp_multi_path','udp_fragment'].includes(field.option))for(const dep of field.deps)dep.type=/^(?!selector$|urltest$).+/;
+		}
+	}
+	const groupMembers=s.children.find(o=>o.option==='group_nodes');groupMembers.validate=nodeValidation;
+	o=s.option(form.DummyValue,'_node_summary',_('Node / group details'));
+	o.modalonly=false;
+	o.cfgvalue=function(sid){
+		const n=uci.get(data[0],sid) || {};
+		if(n.node_mode==='reference')return _('Reference: %s').format(nodeName(n.node_base))+(n.local_detour && n.local_detour!=='_direct'?' · '+_('Via %s').format(nodeName(n.local_detour)):'');
+		if(['selector','urltest'].includes(n.type)){
+			const members=n.group_nodes || [];
+			const selected=n.type==='selector'?_('Default: %s').format(groupLabel(n.group_default || members[0])):_('Automatic latency selection');
+			return _('%s members').format(members.length)+' · '+selected+' — '+members.map(id=>uci.get(data[0],id,'label') || id).join(', ');
+		}
+		if(n.type==='tailscale')return n.tailscale_exit_node?_('Exit node: %s').format(n.tailscale_exit_node):_('Tailnet access');
+		if(n.type==='direct')return _('Direct connection');
+		return (n.address || '—')+(n.port?':'+n.port:'')+(n.tls==='1'?' · TLS':'')+(n.transport?' · '+n.transport:'');
+	};
 	return s;
 }
 
@@ -1205,7 +1473,8 @@ return view.extend({
 			const url = new URL(suburl);
 			const urlhash = hp.calcStringMD5(suburl.replace(/#.*$/, ''));
 			const title = url.hash ? decodeURIComponent(url.hash.slice(1)) : url.hostname;
-			subinfo.push({ 'hash': urlhash, 'title': title });
+			let sourceID;uci.sections(data[0],'subscription_source',s=>{if(s.url===suburl.replace(/#.*$/,''))sourceID=s['.name'];});
+			subinfo.push({ 'hash': urlhash, 'title': title, 'id':sourceID });
 		}
 
 		m = new form.Map('homeproxy', _('Edit nodes'));
@@ -1220,7 +1489,7 @@ return view.extend({
 		ss.addremove = true;
 		ss.filter = function(section_id) {
 			for (let info of subinfo)
-				if (info.hash === uci.get(data[0], section_id, 'grouphash'))
+				if ((info.hash === uci.get(data[0], section_id, 'grouphash') || info.id && info.id === uci.get(data[0],section_id,'source_id')))
 					return false;
 
 			return true;
@@ -1230,7 +1499,7 @@ return view.extend({
 		ss.handleLinkImport = function() {
 			let textarea = new ui.Textarea();
 			ui.showModal(_('Import share links'), [
-				E('p', _('Support Hysteria, Shadowsocks, Trojan, v2rayN (VMess), and XTLS (VLESS) online configuration delivery standard.')),
+				E('p', _('Supports sing-box JSON nodes and groups, SIP008, and proxy share-link subscriptions. DNS and routing rules are not imported.')),
 				textarea.render(),
 				E('div', { class: 'right' }, [
 					E('button', {
@@ -1258,8 +1527,7 @@ return view.extend({
 										if (['vless', 'vmess'].includes(config.type))
 											config.packet_encoding = packet_encoding
 
-										let nameHash = hp.calcStringMD5(config.label);
-										let sid = uci.add(data[0], 'node', nameHash);
+										let sid = uci.add(data[0], 'node');
 										Object.keys(config).forEach((k) => {
 											uci.set(data[0], sid, k, config[k]);
 										});
@@ -1323,7 +1591,7 @@ return view.extend({
 			o = s.taboption('sub_' + info.hash, form.SectionValue, '_sub_' + info.hash, form.GridSection, 'node');
 			ss = renderNodeSettings(o.subsection, data, features, main_node, routing_mode);
 			ss.filter = function(section_id) {
-				return (uci.get(data[0], section_id, 'grouphash') === info.hash);
+				return ((uci.get(data[0], section_id, 'grouphash') === info.hash || info.id && uci.get(data[0],section_id,'source_id') === info.id));
 			}
 		}
 		/* Subscription nodes end */
@@ -1347,7 +1615,16 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.taboption('subscription', form.DynamicList, 'subscription_url', _('Subscription URL-s'),
-			_('Support Hysteria, Shadowsocks, Trojan, v2rayN (VMess), and XTLS (VLESS) online configuration delivery standard.'));
+			_('Supports sing-box JSON nodes and groups, SIP008, and proxy share-link subscriptions. DNS and routing rules are not imported.'));
+		o.write = function(section, values) {
+			const clean=v=>v.replace(/#.*$/,'');
+			const old=(uci.get(data[0],section,'subscription_url') || []).map(clean), next=(values || []).map(clean);
+			const removed=old.filter(v=>!next.includes(v)),added=next.filter(v=>!old.includes(v));
+			// A single URL replacement retains its source identity (e.g. token rotation).
+			if(removed.length===1 && added.length===1)uci.sections(data[0],'subscription_source',s=>{if(s.url===removed[0])uci.set(data[0],s['.name'],'url',added[0]);});
+			uci.set(data[0],section,'subscription_url',values);
+		};
+
 		o.validate = function(section_id, value) {
 			if (section_id && value) {
 				try {
@@ -1404,6 +1681,7 @@ return view.extend({
 		o = s.taboption('subscription', form.Button, '_update_subscriptions', _('Update nodes from subscriptions'));
 		o.inputstyle = 'apply';
 		o.inputtitle = function(section_id) {
+			if (this.map.readonly) { this.readonly = true; return _('Read-only access'); }
 			let sublist = uci.get(data[0], section_id, 'subscription_url') || [];
 			if (sublist.length > 0) {
 				return _('Update %s subscriptions').format(sublist.length);
@@ -1413,6 +1691,7 @@ return view.extend({
 			}
 		}
 		o.onclick = function() {
+			if (this.map.readonly) return;
 			return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions.uc').then((res) => {
 				return location.reload();
 			}).catch((err) => {
@@ -1424,6 +1703,7 @@ return view.extend({
 		o = s.taboption('subscription', form.Button, '_remove_subscriptions', _('Remove all nodes from subscriptions'));
 		o.inputstyle = 'reset';
 		o.inputtitle = function() {
+			if (this.map.readonly) { this.readonly = true; return _('Read-only access'); }
 			let subnodes = [];
 			uci.sections(data[0], 'node', (res) => {
 				if (res.grouphash)
@@ -1438,20 +1718,19 @@ return view.extend({
 			}
 		}
 		o.onclick = function() {
+			if (this.map.readonly) return;
 			let subnodes = [];
 			uci.sections(data[0], 'node', (res) => {
 				if (res.grouphash)
 					subnodes = subnodes.concat(res['.name'])
 			});
 
-			for (let i in subnodes)
-				uci.remove(data[0], subnodes[i]);
-
-			if (subnodes.includes(uci.get(data[0], 'config', 'main_node')))
-				uci.set(data[0], 'config', 'main_node', 'nil');
-
-			if (subnodes.includes(uci.get(data[0], 'config', 'main_udp_node')))
-				uci.set(data[0], 'config', 'main_udp_node', 'nil');
+			const references = nodeReferences(uci.sections(data[0]), subnodes);
+			if (references.length) {
+				ui.addNotification(null, E('p', {}, _('These nodes are still referenced. Update these settings before removing them:') + ' ' + references.join('; ')), 'error');
+				return;
+			}
+			for (const id of subnodes) uci.remove(data[0], id);
 
 			this.inputtitle = _('%s nodes removed').format(subnodes.length);
 			this.readonly = true;

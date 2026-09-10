@@ -1,0 +1,3 @@
+#!/bin/sh
+# Development environment only; no proxy test is started automatically.
+exit 0

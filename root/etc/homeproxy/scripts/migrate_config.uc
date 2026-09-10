@@ -159,10 +159,10 @@ uci.foreach(uciconfig, ucidnsrule, (cfg) => {
 	/* outbound was removed in sb 1.12 */
 	if (cfg.outbound) {
 		uci.delete(uciconfig, cfg['.name']);
-		if (!cfg.enabled)
+		if (cfg.enabled !== '1')
 			return;
 
-		map(cfg.outbound, (outbound) => {
+		map(type(cfg.outbound) === 'array' ? cfg.outbound : [cfg.outbound], (outbound) => {
 			switch (outbound) {
 			case 'direct-out':
 			case 'block-out':
@@ -171,7 +171,7 @@ uci.foreach(uciconfig, ucidnsrule, (cfg) => {
 				uci.set(uciconfig, ucirouting, 'default_outbound_dns', cfg.server);
 				break;
 			default:
-				uci.set(uciconfig, cfg.outbound, 'domain_resolver', cfg.server);
+				uci.set(uciconfig, outbound, 'domain_resolver', cfg.server);
 				break;
 			}
 		});

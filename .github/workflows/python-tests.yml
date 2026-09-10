@@ -1,0 +1,30 @@
+name: Python regression tests
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare test dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake gcc pkg-config libjson-c-dev curl openssl python3
+      - name: Provide pinned ucode and sing-box (CI only)
+        run: |
+          tools_dir="$RUNNER_TEMP/homeproxy-test-tools"
+          mkdir -p "$tools_dir/ucode-src" "$tools_dir/core"
+          curl -fsSL --retry 3 https://codeload.github.com/jow-/ucode/tar.gz/64cf18aa55c67e73b9acd0262a44d50b41774ed8 -o "$tools_dir/ucode.tar.gz"
+          echo "313cecf4824433b923b4c2b09569cd01c0201de7031be2a3cea6a7f99513a5a9  $tools_dir/ucode.tar.gz" | sha256sum -c -
+          tar -xf "$tools_dir/ucode.tar.gz" -C "$tools_dir/ucode-src" --strip-components=1
+          cmake -S "$tools_dir/ucode-src" -B "$tools_dir/build" -DCMAKE_INSTALL_PREFIX="$tools_dir/install" -DCMAKE_INSTALL_LIBDIR=lib -DUBUS_SUPPORT=OFF -DUCI_SUPPORT=OFF -DULOOP_SUPPORT=OFF
+          cmake --build "$tools_dir/build" --parallel 2
+          cmake --install "$tools_dir/build"
+          curl -fsSL --retry 3 https://github.com/SagerNet/sing-box/releases/download/v1.14.0/sing-box-1.14.0-linux-amd64.tar.gz -o "$tools_dir/core.tar.gz"
+          echo "2375de6999f4f56ab46b4fc5ddf26a6aba1d3e61a0f4e7ddec2f4690457d5f63  $tools_dir/core.tar.gz" | sha256sum -c -
+          tar -xf "$tools_dir/core.tar.gz" -C "$tools_dir/core" --strip-components=1
+          echo "UCODE=$tools_dir/install/bin/ucode" >> "$GITHUB_ENV"
+          echo "SING_BOX=$tools_dir/core/sing-box" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$tools_dir/install/lib" >> "$GITHUB_ENV"
+      - name: Run Python suite without skips
+        run: python3 scripts/test-python.py
