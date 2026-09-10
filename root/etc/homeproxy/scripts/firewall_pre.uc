@@ -2,7 +2,7 @@
 
 'use strict';
 
-import { writefile } from 'fs';
+import { writefile, unlink } from 'fs';
 import { cursor } from 'uci';
 import { isEmpty, RUN_DIR } from 'homeproxy';
 
@@ -14,7 +14,7 @@ const routing_mode = uci.get(cfgname, 'config', 'routing_mode') || 'bypass_mainl
       proxy_mode = uci.get(cfgname, 'config', 'proxy_mode') || 'redirect_tproxy';
 
 let outbound_node, tun_name;
-if (match(proxy_mode, /tun/)) {
+if (getenv('HP_START_CLIENT') !== '0' && match(proxy_mode, /tun/)) {
 	if (routing_mode === 'custom')
 		outbound_node = uci.get(cfgname, 'routing', 'default_outbound') || 'nil';
 	else
@@ -34,7 +34,7 @@ if (tun_name) {
 	push(input ,`iifname ${tun_name} counter accept comment "!${cfgname}: accept tun input"`);
 }
 
-if (server_enabled === '1') {
+if (getenv('HP_START_SERVER') !== '0' && server_enabled === '1') {
 	uci.foreach(cfgname, 'server', (s) => {
 		if (s.enabled !== '1' || s.firewall !== '1')
 			return;
@@ -46,6 +46,10 @@ if (server_enabled === '1') {
 
 if (!isEmpty(forward))
 	writefile(RUN_DIR + '/fw4_forward.nft', join('\n', forward) + '\n');
+else
+	unlink(RUN_DIR + '/fw4_forward.nft');
 
 if (!isEmpty(input))
 	writefile(RUN_DIR + '/fw4_input.nft', join('\n', input) + '\n');
+else
+	unlink(RUN_DIR + '/fw4_input.nft');

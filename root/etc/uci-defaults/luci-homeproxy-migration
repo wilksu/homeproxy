@@ -1,5 +1,5 @@
 #!/bin/sh
-
-ucode "/etc/homeproxy/scripts/migrate_config.uc"
-
+# Leave the defaults script in place when migration fails so it can be retried.
+ucode /etc/homeproxy/scripts/migrate_config.uc || exit 1
+/etc/homeproxy/scripts/prepare.sh || exit 1
 exit 0

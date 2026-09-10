@@ -9,6 +9,8 @@
 
 import { writefile } from 'fs';
 import { cursor } from 'uci';
+import { connect } from 'ubus';
+import { apiService, httpClients, certProviders, sourceMap } from 'config114';
 
 import {
 	isEmpty, strToBool, strToInt, strToTime,
@@ -16,7 +18,7 @@ import {
 } from 'homeproxy';
 
 /* UCI config start */
-const uci = cursor();
+const uci = cursor(getenv('HP_UCI_CONF_DIR') || '/etc/config', getenv('HP_UCI_SAVE_DIR') || '/tmp/.uci');
 
 const uciconfig = 'homeproxy';
 uci.load(uciconfig);
@@ -87,19 +89,19 @@ uci.foreach(uciconfig, uciserver, (cfg) => {
 		users: (cfg.type !== 'shadowsocks') ? [
 			{
 				name: !(cfg.type in ['http', 'mixed', 'naive', 'socks']) ? 'cfg-' + cfg['.name'] + '-server' : null,
-				username: cfg.username,
-				password: cfg.password,
+				username: (cfg.type in ['socks', 'mixed', 'http', 'naive']) ? cfg.username : null,
+				password: (cfg.type in ['socks', 'mixed', 'http', 'naive', 'trojan', 'hysteria2', 'tuic', 'anytls']) ? cfg.password : null,
 
 				/* Hysteria */
 				auth: (cfg.hysteria_auth_type === 'base64') ? cfg.hysteria_auth_payload : null,
 				auth_str: (cfg.hysteria_auth_type === 'string') ? cfg.hysteria_auth_payload : null,
 
 				/* Tuic */
-				uuid: cfg.uuid,
+				uuid: (cfg.type in ['vmess', 'vless', 'tuic']) ? cfg.uuid : null,
 
 				/* VLESS / VMess */
-				flow: cfg.vless_flow,
-				alterId: strToInt(cfg.vmess_alterid)
+				flow: cfg.type === 'vless' ? cfg.vless_flow : null,
+				alterId: cfg.type === 'vmess' ? strToInt(cfg.vmess_alterid) : null
 			}
 		] : null,
 
@@ -129,7 +131,7 @@ uci.foreach(uciconfig, uciserver, (cfg) => {
 				email: cfg.tls_acme_email,
 				provider: cfg.tls_acme_provider,
 				disable_http_challenge: strToBool(cfg.tls_acme_dhc),
-				disable_tls_alpn_challenge: (cfg.tls_acme_dtac),
+				disable_tls_alpn_challenge: strToBool(cfg.tls_acme_dtac),
 				alternative_http_port: strToInt(cfg.tls_acme_ahp),
 				alternative_tls_port: strToInt(cfg.tls_acme_atp),
 				external_account: (cfg.tls_acme_external_account === '1') ? {
@@ -181,5 +183,12 @@ uci.foreach(uciconfig, uciserver, (cfg) => {
 if (length(config.inbounds) === 0)
 	exit(1);
 
-system('mkdir -p ' + RUN_DIR);
-writefile(RUN_DIR + '/sing-box-s.json', sprintf('%.J\n', removeBlankAttrs(config)));
+httpClients(config);
+certProviders(config);
+const lanAddress = connect().call('network.interface.lan', 'status', {})?.['ipv4-address']?.[0]?.address;
+const api = apiService(uci, 'server', lanAddress);
+if (api) config.services = [api];
+const outputDir = getenv('HP_OUTPUT_DIR') || RUN_DIR;
+system('mkdir -p ' + outputDir);
+writefile(outputDir + '/sing-box-s.json', sprintf('%.J\n', removeBlankAttrs(config)));
+sourceMap(config, uci, outputDir + '/sing-box-s.sources', {});

@@ -8,6 +8,7 @@
 'use strict';
 
 import { access, error, lstat, popen, readfile, writefile } from 'fs';
+import { runtime, diagnose, apiSecret } from 'homeproxy_runtime';
 
 /* Kanged from ucode/luci */
 function shellquote(s) {
@@ -22,6 +23,11 @@ const HP_DIR = '/etc/homeproxy';
 const RUN_DIR = '/var/run/homeproxy';
 
 const methods = {
+	api_read: { call: () => ({ available: true }) },
+	api_control: { call: () => ({ available: true }) },
+	api_secret: { call: () => apiSecret() },
+	runtime: { args: { instance: 'client' }, call: (req) => runtime(req.args.instance) },
+	diagnose: { args: { stage: '', target: '', instance: 'client' }, call: (req) => diagnose(req.args.stage, req.args.target, req.args.instance) },
 	acllist_read: {
 		args: { type: 'type' },
 		call: function(req) {

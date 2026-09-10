@@ -8,6 +8,7 @@
 'use strict';
 
 import { md5 } from 'digest';
+import { importNodes, nodeID } from 'node_import';
 import { open } from 'fs';
 import { connect } from 'ubus';
 import { cursor } from 'uci';
@@ -15,12 +16,13 @@ import { cursor } from 'uci';
 import { urldecode, urlencode } from 'luci.http';
 
 import {
-	wGET, decodeBase64Str, getTime, isEmpty, parseURL,
+	executeCommand, shellQuote, decodeBase64Str, getTime, isEmpty, parseURL,
 	validation, HP_DIR, RUN_DIR
 } from 'homeproxy';
 
 /* UCI config start */
-const uci = cursor();
+if (!getenv('HP_SUBSCRIPTION_STAGED')) exit(system(['/bin/sh', '/etc/homeproxy/scripts/subscription-transaction.sh']));
+const uci = cursor(getenv('HP_UCI_CONF_DIR'), getenv('HP_UCI_SAVE_DIR'));
 
 const uciconfig = 'homeproxy';
 uci.load(uciconfig);
@@ -37,7 +39,7 @@ const allow_insecure = uci.get(uciconfig, ucisubscription, 'allow_insecure') || 
       user_agent = uci.get(uciconfig, ucisubscription, 'user_agent'),
       via_proxy = uci.get(uciconfig, ucisubscription, 'update_via_proxy') || '0';
 
-const routing_mode = uci.get(uciconfig, ucimain, 'routing_mode') || 'bypass_mainalnd_china';
+const routing_mode = uci.get(uciconfig, ucimain, 'routing_mode') || 'bypass_mainland_china';
 let main_node, main_udp_node;
 if (routing_mode !== 'custom') {
 	main_node = uci.get(uciconfig, ucimain, 'main_node') || 'nil';
@@ -198,6 +200,7 @@ function parse_uri(uri) {
 		case 'socks':
 		case 'socks4':
 		case 'socks4a':
+		case 'socks5':
 		case 'socsk5':
 		case 'socks5h':
 			url = parseURL('http://' + uri[1]) || {};
@@ -477,81 +480,61 @@ function parse_uri(uri) {
 }
 
 function main() {
-	if (via_proxy !== '1') {
-		log('Stopping service...');
-		service_action('stop');
-	}
 
 	for (let url in subscription_urls) {
 		url = replace(url, /#.*$/, '');
 		const groupHash = md5(url);
-		node_cache[groupHash] = {};
+		let sourceID;
+		uci.foreach(uciconfig,'subscription_source',s=>{if(s.url===url)sourceID=s['.name'];});
+		if(!sourceID){sourceID='src_'+groupHash;while(uci.get(uciconfig,sourceID))sourceID='src_'+md5(sourceID);uci.set(uciconfig,sourceID,'subscription_source');uci.set(uciconfig,sourceID,'url',url);}
 
-		const res = wGET(url, user_agent);
+		node_cache[groupHash] = {};
+		node_cache[sourceID] = node_cache[groupHash];
+
+		const proxyArgs = via_proxy === '1' ? ['--noproxy', '', '--socks5-hostname', '127.0.0.1:' + (uci.get(uciconfig, 'infra', 'mixed_port') || '5330')] : ['--noproxy', '*'];
+		const fetched = executeCommand(join(' ', map(['/usr/bin/curl', '--fail', '--silent', '--show-error', '--location', '--proto', '=http,https', '--proto-redir', '=http,https', '--max-time', '30', '--user-agent', user_agent || 'HomeProxy', ...proxyArgs, url], shellQuote)));
+		const res = fetched.exitcode === 0 ? trim(fetched.stdout || '') : null;
 		if (isEmpty(res)) {
-			log(sprintf('Failed to fetch resources from %s.', url));
+			log(sprintf('Failed to fetch subscription %s.', sourceID));
 			continue;
 		}
 
-		let nodes;
+		let parsed=[];
 		try {
-			nodes = json(res).servers || json(res);
-
-			/* Shadowsocks SIP008 format */
-			if (nodes[0].server && nodes[0].method)
-				map(nodes, (_, i) => nodes[i].nodetype = 'sip008');
-		} catch(e) {
-			nodes = decodeBase64Str(res);
-			nodes = nodes ? split(trim(replace(nodes, / /g, '_')), '\n') : [];
-		}
-
-		let count = 0;
-		for (let node in nodes) {
-			let config;
-			if (!isEmpty(node))
-				config = parse_uri(node);
-			if (isEmpty(config))
-				continue;
-
-			const label = config.label;
-			config.label = null;
-			const confHash = md5(sprintf('%J', config)),
-			      nameHash = md5(label);
-			config.label = label;
-
-			if (filter_check(config.label))
-				log(sprintf('Skipping blacklist node: %s.', config.label));
-			else if (node_cache[groupHash][confHash] || node_cache[groupHash][nameHash])
-				log(sprintf('Skipping duplicate node: %s.', config.label));
+			let document;
+			try { document=json(res); } catch(e) {}
+			if(document?.outbounds || document?.endpoints) parsed=importNodes(document,sourceID);
 			else {
-				if (config.tls === '1' && allow_insecure === '1')
-					config.tls_insecure = '1';
-				if (config.type in ['vless', 'vmess'])
-					config.packet_encoding = packet_encoding;
-
-				config.grouphash = groupHash;
-				push(node_result, []);
-				push(node_result[length(node_result)-1], config);
-				node_cache[groupHash][confHash] = config;
-				node_cache[groupHash][nameHash] = config;
-
-				count++;
+				let nodes=document ? document.servers || document : split(trim(decodeBase64Str(res) || res),'\n');
+				if(type(nodes)!=='array')die('Unsupported subscription format');
+				for(let item in nodes){if(type(item)==='object' && item.server && item.method)item.nodetype='sip008';const n=parse_uri(item);if(n)push(parsed,n);}
+				const counts={};for(let n in parsed)counts[n.label]=(counts[n.label] || 0)+1;
+				for(let n in parsed)n.node_id=nodeID(sourceID,counts[n.label]>1 ? n.label+'\n'+md5(sprintf('%J',n)) : n.label);
 			}
+		} catch(e) { log('Subscription '+sourceID+' rejected: '+e); continue; }
+		const accepted=[];
+		for(let node in parsed){
+			if(filter_check(node.label))continue;
+			if(node_cache[groupHash][node.node_id])continue;
+			if(node.tls==='1' && allow_insecure==='1')node.tls_insecure='1';
+			// Native imports retain their explicit packet encoding.
+			if(!node.source_tag && node.type in ['vless','vmess'])node.packet_encoding=packet_encoding;
+			node.grouphash=groupHash;node.source_id=sourceID;
+			node_cache[groupHash][node.node_id]=node;push(accepted,node);
 		}
+		// Filtering must not silently create dangling selector or detour references.
+		let broken=false;
+		for(let n in accepted)for(let ref in [...(n.group_nodes || []),...(n.node_detour?[n.node_detour]:[])])if(!node_cache[groupHash][ref])broken=true;
+		if(broken){node_cache[groupHash]={};node_cache[sourceID]=node_cache[groupHash];log('Subscription '+sourceID+' rejected: filtering removed a referenced node');continue;}
+		node_cache[sourceID]=node_cache[groupHash];
+		push(node_result,accepted);
+		log(sprintf('Subscription %s: parsed %d node/group objects',sourceID,length(accepted)));
 
-		if (count == 0)
-			log(sprintf('No valid node found in %s.', url));
-		else
-			log(sprintf('Successfully fetched %s nodes of total %s from %s.', count, length(nodes), url));
 	}
 
-	if (isEmpty(node_result)) {
+	if (isEmpty(node_result) || !length(filter(node_result,n=>length(n)))) {
 		log('Failed to update subscriptions: no valid node found.');
 
-		if (via_proxy !== '1') {
-			log('Starting service...');
-			service_action('start');
-		}
 
 		return false;
 	}
@@ -563,22 +546,21 @@ function main() {
 			return null;
 
 		/* Empty object - failed to fetch nodes */
-		if (length(node_cache[cfg.grouphash]) === 0)
+		if (length(node_cache[cfg.source_id || cfg.grouphash]) === 0)
 			return null;
 
-		if (!node_cache[cfg.grouphash] || !node_cache[cfg.grouphash][cfg['.name']]) {
+		if (!node_cache[cfg.source_id || cfg.grouphash] || !node_cache[cfg.source_id || cfg.grouphash][cfg['.name']]) {
 			uci.delete(uciconfig, cfg['.name']);
 			removed++;
 
 			log(sprintf('Removing node: %s.', cfg.label || cfg['name']));
 		} else {
-			map(keys(cfg), (v) => {
-				if (v in node_cache[cfg.grouphash][cfg['.name']])
-					uci.set(uciconfig, cfg['.name'], v, node_cache[cfg.grouphash][cfg['.name']][v]);
-				else
-					uci.delete(uciconfig, cfg['.name'], v);
-			});
-			node_cache[cfg.grouphash][cfg['.name']].isExisting = true;
+			const fresh=node_cache[cfg.source_id || cfg.grouphash][cfg['.name']];
+			for(let key in ['local_detour','local_bind_interface','local_domain_resolver','local_domain_strategy'])if(cfg[key])fresh[key]=cfg[key];
+			for(let key in keys(cfg))if(substr(key,0,1)!=='.' && !(key in fresh))uci.delete(uciconfig,cfg['.name'],key);
+			for(let key in keys(fresh))uci.set(uciconfig,cfg['.name'],key,fresh[key]);
+
+			node_cache[cfg.source_id || cfg.grouphash][cfg['.name']].isExisting = true;
 		}
 	});
 	for (let nodes in node_result)
@@ -586,7 +568,7 @@ function main() {
 			if (node.isExisting)
 				return null;
 
-			const nameHash = md5(node.label);
+			const nameHash = node.node_id;
 			uci.set(uciconfig, nameHash, 'node');
 			map(keys(node), (v) => uci.set(uciconfig, nameHash, v, node[v]));
 
@@ -595,19 +577,20 @@ function main() {
 		});
 	uci.commit(uciconfig);
 
-	let need_restart = (via_proxy !== '1');
-	if (!isEmpty(main_node)) {
+	let need_restart = true;
+	if (!isEmpty(main_node) && main_node !== 'nil') {
 		const first_server = uci.get_first(uciconfig, ucinode);
 		if (first_server) {
 			let main_urltest_nodes;
 			if (main_node === 'urltest') {
-				main_urltest_nodes = filter(uci.get(uciconfig, ucimain, 'main_urltest_nodes'), (v) => {
+				main_urltest_nodes = filter(uci.get(uciconfig, ucimain, 'main_urltest_nodes') || [], (v) => {
 					if (!uci.get(uciconfig, v)) {
 						log(sprintf('Node %s is gone, removing from urltest list.', v));
 						return false;
 					}
 					return true;
 				});
+				uci.set(uciconfig, ucimain, 'main_urltest_nodes', main_urltest_nodes);
 			}
 
 			if ((main_node === 'urltest') ? !length(main_urltest_nodes) : !uci.get(uciconfig, main_node)) {
@@ -618,16 +601,17 @@ function main() {
 				log('Main node is gone, switching to the first node.');
 			}
 
-			if (!isEmpty(main_udp_node) && main_udp_node !== 'same') {
+			if (!isEmpty(main_udp_node) && main_udp_node !== 'same' && main_udp_node !== 'nil') {
 				let main_udp_urltest_nodes;
 				if (main_udp_node === 'urltest') {
-					main_udp_urltest_nodes = filter(uci.get(uciconfig, ucimain, 'main_udp_urltest_nodes'), (v) => {
+					main_udp_urltest_nodes = filter(uci.get(uciconfig, ucimain, 'main_udp_urltest_nodes') || [], (v) => {
 						if (!uci.get(uciconfig, v)) {
 							log(sprintf('Node %s is gone, removing from urltest list.', v));
 							return false;
 						}
 						return true;
 					});
+					uci.set(uciconfig, ucimain, 'main_udp_urltest_nodes', main_udp_urltest_nodes);
 				}
 
 				if ((main_udp_node === 'urltest') ? !length(main_udp_urltest_nodes) : !uci.get(uciconfig, main_udp_node)) {
@@ -648,25 +632,16 @@ function main() {
 		}
 	}
 
-	if (need_restart) {
+	uci.commit(uciconfig);
+	if (need_restart && !getenv('HP_SUBSCRIPTION_STAGED')) {
 		log('Restarting service...');
-		service_action('stop');
-		service_action('start');
+		if(service_action('restart') !== 0){log('Subscription data saved, but the new configuration was not activated. Check validation and service logs.');return false;}
 	}
 
 	log(sprintf('%s nodes added, %s removed.', added, removed));
-	log('Successfully updated subscriptions.');
+	log(getenv('HP_SUBSCRIPTION_STAGED') ? 'Subscription candidate prepared; awaiting validation.' : 'Successfully updated subscriptions.');
 }
 
 if (!isEmpty(subscription_urls))
-	try {
-		call(main);
-	} catch(e) {
-		log('[FATAL ERROR] An error occurred during updating subscriptions:');
-		log(sprintf('%s: %s', e.type, e.message));
-		log(e.stacktrace[0].context);
-
-		log('Restarting service...');
-		service_action('stop');
-		service_action('start');
-	}
+	try { if (call(main) === false) exit(1); }
+	catch(e) { log('[FATAL ERROR] Subscription update failed: '+e); exit(1); }

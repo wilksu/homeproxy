@@ -3119,3 +3119,1273 @@ msgstr "有效端口值"
 #: htdocs/luci-static/resources/homeproxy.js:328
 msgid "valid uuid"
 msgstr "有效 uuid"
+
+msgid "HomeProxy observability"
+msgstr "HomeProxy 观测"
+
+msgid "Observability"
+msgstr "观测"
+
+msgid "API and Dashboard"
+msgstr "API 与 Dashboard"
+
+msgid "API and Dashboard settings"
+msgstr "API 与 Dashboard 设置"
+
+msgid "API and official Dashboard"
+msgstr "API 与官方 Dashboard"
+
+msgid "Enable native API"
+msgstr "启用原生 API"
+
+msgid "Client API port"
+msgstr "客户端 API 端口"
+
+msgid "Server API port"
+msgstr "服务端 API 端口"
+
+msgid "Enable official Dashboard"
+msgstr "启用官方 Dashboard"
+
+msgid "Dashboard resources"
+msgstr "Dashboard 资源"
+
+msgid "API TLS certificate path"
+msgstr "API TLS 证书路径"
+
+msgid "API TLS private key path"
+msgstr "API TLS 私钥路径"
+
+msgid "Additional allowed origins"
+msgstr "额外允许的来源"
+
+msgid "Dashboard access secret"
+msgstr "Dashboard 访问密钥"
+
+msgid "Show secret"
+msgstr "显示密钥"
+
+msgid "API secret"
+msgstr "API 密钥"
+
+msgid "Open official Dashboard"
+msgstr "打开官方 Dashboard"
+
+msgid "Core"
+msgstr "核心"
+
+msgid "Required"
+msgstr "要求版本"
+
+msgid "Instance"
+msgstr "实例"
+
+msgid "Overview"
+msgstr "概览"
+
+msgid "Outbound groups"
+msgstr "出站组"
+
+msgid "Configuration sources"
+msgstr "配置来源"
+
+msgid "Migration review"
+msgstr "迁移复核"
+
+msgid "Domain diagnostics"
+msgstr "域名诊断"
+
+msgid "Domain or URL"
+msgstr "域名或 URL"
+
+msgid "Start diagnosis"
+msgstr "开始诊断"
+
+msgid "Export result"
+msgstr "导出结果"
+
+msgid "Diagnostics"
+msgstr "诊断"
+
+msgid "Live logs"
+msgstr "实时日志"
+
+msgid "Pause display"
+msgstr "暂停显示"
+
+msgid "Resume display"
+msgstr "恢复显示"
+
+msgid "Filter logs"
+msgstr "筛选日志"
+
+msgid "Filter connections"
+msgstr "筛选连接"
+
+msgid "Filter domain, source, rule or outbound"
+msgstr "筛选域名、来源、规则或出站"
+
+msgid "Close connection"
+msgstr "关闭连接"
+
+msgid "Inspect"
+msgstr "查看详情"
+
+msgid "Test latency"
+msgstr "测试延迟"
+
+msgid "Untested"
+msgstr "未测试"
+
+msgid "Local list capped at 5000 connections"
+msgstr "本地列表最多保留 5000 条连接"
+
+msgid "Waiting for runtime metrics…"
+msgstr "等待运行指标…"
+
+msgid "Cannot load API client"
+msgstr "无法加载 API 客户端"
+
+msgid "Select the client instance for domain diagnostics."
+msgstr "请选择客户端实例进行域名诊断。"
+
+msgid "Core/API version is outside the supported pairing."
+msgstr "核心或 API 版本不在支持的配套范围内。"
+
+msgid "The paired core must be running with API enabled. Check API settings and the HomeProxy startup log."
+msgstr "需要运行配套核心并启用 API。请检查 API 设置和 HomeProxy 启动日志。"
+
+msgid "Client and server API ports must differ."
+msgstr "客户端与服务端 API 端口不能相同。"
+
+msgid "Enter an HTTP(S) origin without a path."
+msgstr "请输入不含路径的 HTTP(S) 来源。"
+
+msgid "Dashboard is listening on router loopback. Configure a LAN address to open it from this browser."
+msgstr "Dashboard 当前监听路由器回环地址。设置 LAN 地址后，才能从此浏览器直接打开。"
+
+msgid "LuCI uses an authenticated same-origin relay. The official Dashboard connects to the core API using its own secret. Applying these settings restarts the service."
+msgstr "LuCI 通过已鉴权的同源转发访问 API，官方 Dashboard 则使用密钥直接连接核心 API。应用这些设置会重启服务。"
+
+msgid "Empty uses the LAN IPv4 address. Use router loopback only when the standalone Dashboard is not needed."
+msgstr "留空使用 LAN IPv4 地址。不需要独立 Dashboard 时，可使用路由器回环地址。"
+
+msgid "Install the paired homeproxy-dashboard package using the system package manager. Static resources include the official fonts; no Node.js runtime is needed."
+msgstr "请通过系统软件包管理安装配套的 homeproxy-dashboard 包。静态资源保留官方字体，不需要 Node.js 运行环境。"
+
+msgid "Only needed for a Dashboard hosted on another origin. Use complete http:// or https:// origins."
+msgstr "仅在 Dashboard 位于其他来源时需要设置。请填写完整的 http:// 或 https:// 来源。"
+
+msgid "Paste this into the official Dashboard connection settings. This secret grants core control access."
+msgstr "将此密钥填入官方 Dashboard 的连接设置。持有该密钥可控制核心。"
+
+msgid "The latest 3000 received entries are kept locally; at most 1000 are displayed. API logs can include debug messages while the file log level remains warn."
+msgstr "本地保留最近收到的 3000 条日志，最多显示 1000 条。即使文件日志级别为 warn，API 日志仍可能包含 debug 消息。"
+
+msgid "Tests run from the router and the explicit proxy. LAN transparent interception needs traffic from the LAN device. Cancel stops subsequent stages; the active stage has a short timeout."
+msgstr "测试分别从路由器和显式代理发起。验证 LAN 透明代理需要由 LAN 设备发起流量。取消会停止后续阶段，当前阶段有较短的超时限制。"
+
+msgid "Disable Chrome QUIC handshake"
+msgstr "禁用 Chrome QUIC 握手模拟"
+
+msgid "Enable for Hysteria2 servers with Ed25519 certificates or to retain the older handshake behavior."
+msgstr "Hysteria2 服务端使用 Ed25519 证书，或需要保留旧握手行为时启用。"
+
+msgid "Hysteria2 BBR profile"
+msgstr "Hysteria2 BBR 参数方案"
+
+msgid "Maximum hop interval (seconds)"
+msgstr "最大端口跳跃间隔（秒）"
+
+msgid "Minimum obfuscation packet size"
+msgstr "最小混淆包大小"
+
+msgid "Maximum obfuscation packet size"
+msgstr "最大混淆包大小"
+
+msgid "TLS handshake timeout (seconds)"
+msgstr "TLS 握手超时（秒）"
+
+msgid "Cloudflare DoH"
+msgstr "Cloudflare DoH"
+
+msgid "AliDNS DoH"
+msgstr "阿里云 DoH"
+
+msgid "STUN server"
+msgstr "STUN 服务器"
+
+msgid "Checking…"
+msgstr "正在检查…"
+
+msgid "Start the paired core with API enabled first."
+msgstr "请先启动配套核心并启用 API。"
+
+msgid "No valid STUN response received."
+msgstr "未收到有效的 STUN 响应。"
+
+msgid "Timed out"
+msgstr "已超时"
+
+msgid "Cancelled"
+msgstr "已取消"
+
+msgid "Send STUN through the current UDP/default outbound and require a binding response. This does not test LAN interception or every UDP application."
+msgstr "通过当前 UDP／默认出站发送 STUN 请求，收到绑定响应才算通过。这不验证 LAN 透明代理或所有 UDP 应用。"
+
+msgid "Cancelling after the current stage…"
+msgstr "将在当前阶段结束后取消…"
+
+msgid "Connected"
+msgstr ""
+
+msgid "Connecting"
+msgstr ""
+
+msgid "Connecting to the core…"
+msgstr "正在连接核心…"
+
+msgid "Connection details"
+msgstr "连接详情"
+
+msgid "Connections"
+msgstr ""
+
+msgid "Core DNS · HTTPS"
+msgstr "核心 DNS · HTTPS"
+
+msgid "Core DNS · IPv4"
+msgstr "核心 DNS · IPv4"
+
+msgid "Core DNS · IPv6"
+msgstr "核心 DNS · IPv6"
+
+msgid "Core configuration"
+msgstr "核心配置"
+
+msgid "Core memory usage"
+msgstr "核心内存用量"
+
+msgid "Current transfer rate"
+msgstr "当前传输速率"
+
+msgid "Destination"
+msgstr ""
+
+msgid "Details"
+msgstr ""
+
+msgid "Diagnosis finished"
+msgstr "诊断结束"
+
+msgid "Diagnosis progress"
+msgstr "诊断进度"
+
+msgid "Dismiss"
+msgstr "关闭"
+
+msgid "Display paused; new messages are still received."
+msgstr "已暂停显示，仍在接收新日志。"
+
+msgid "Download"
+msgstr ""
+
+msgid "Enter a domain or URL to inspect DNS, HTTP connectivity and routing."
+msgstr "输入域名或网址，检查 DNS、HTTP 连通性和路由。"
+
+msgid "Groups"
+msgstr ""
+
+msgid "Inbound / outbound"
+msgstr "入站／出站"
+
+msgid "Live display"
+msgstr "实时显示"
+
+msgid "Log level"
+msgstr ""
+
+msgid "Logs"
+msgstr ""
+
+msgid "Memory"
+msgstr ""
+
+msgid "Next"
+msgstr ""
+
+msgid "No active connections. New connections will appear here automatically."
+msgstr "当前没有活动连接。新连接将自动显示在这里。"
+
+msgid "No connections match this filter."
+msgstr "没有符合筛选条件的连接。"
+
+msgid "No log messages match the current filters."
+msgstr "没有符合当前筛选条件的日志。"
+
+msgid "No outbound groups. A configuration using a single node may not create groups."
+msgstr "当前没有出站组。使用单个节点的配置可能不会创建出站组。"
+
+msgid "Not running"
+msgstr ""
+
+msgid "Observability pages"
+msgstr "观测页面"
+
+msgid "Operation completed."
+msgstr "操作已完成。"
+
+msgid "Page"
+msgstr ""
+
+msgid "Previous"
+msgstr ""
+
+msgid "Proxy HTTP connection"
+msgstr "代理 HTTP 连接"
+
+msgid "Refresh"
+msgstr ""
+
+msgid "Router HTTP connection"
+msgstr "路由器 HTTP 连接"
+
+msgid "Routing configuration"
+msgstr "路由配置"
+
+msgid "Running"
+msgstr ""
+
+msgid "Running…"
+msgstr ""
+
+msgid "Select"
+msgstr ""
+
+msgid "Selected"
+msgstr ""
+
+msgid "Source"
+msgstr ""
+
+msgid "System DNS · HTTPS"
+msgstr "系统 DNS · HTTPS"
+
+msgid "System DNS · IPv4"
+msgstr "系统 DNS · IPv4"
+
+msgid "System DNS · IPv6"
+msgstr "系统 DNS · IPv6"
+
+msgid "System environment"
+msgstr "系统环境"
+
+msgid "Upload"
+msgstr ""
+
+msgid "Waiting for connections…"
+msgstr "正在等待连接…"
+
+msgid "Waiting for log messages…"
+msgstr "正在等待日志…"
+
+msgid "connections"
+msgstr ""
+
+msgid "A profile name is required."
+msgstr "请输入配置名称。"
+
+msgid "Actions"
+msgstr "操作"
+
+msgid "Add profile"
+msgstr "添加配置"
+
+msgid "Copy as local profile"
+msgstr "复制为本地配置"
+
+msgid "Delete profile"
+msgstr "删除配置"
+
+msgid "Edit profile"
+msgstr "编辑配置"
+
+msgid "Every 24 hours"
+msgstr "每 24 小时"
+
+msgid "Every 6 hours"
+msgstr "每 6 小时"
+
+msgid "Import a native profile first."
+msgstr "请先导入一份原生配置。"
+
+msgid "Local configuration"
+msgstr "本地配置"
+
+msgid "Manage complete sing-box configurations. HomeProxy owns traffic interception, DNS ingress and the management API. Importing or updating a profile does not switch the running service."
+msgstr "管理完整的 sing-box 配置。HomeProxy 负责流量接管、DNS 入口和管理 API。导入或更新配置不会切换正在运行的服务。"
+
+msgid "Manage native profiles"
+msgstr "管理原生配置"
+
+msgid "Manual updates"
+msgstr "手动更新"
+
+msgid "Maximum configuration size is 2 MiB"
+msgstr "配置文件最大为 2 MiB"
+
+msgid "Native configuration"
+msgstr "原生配置"
+
+msgid "Native profile"
+msgstr "原生配置"
+
+msgid "Native profiles"
+msgstr "原生配置"
+
+msgid "No native profiles. Add a subscription or import a JSON file."
+msgstr "暂无原生配置。请添加订阅或导入 JSON 文件。"
+
+msgid "Nodes / Groups"
+msgstr "节点／选择组"
+
+msgid "Profile updated. Apply it explicitly to restart the service."
+msgstr "配置已更新。需要手动应用，才会重启服务使用新配置。"
+
+msgid "Remote subscription"
+msgstr "远程订阅"
+
+msgid "Restore previous version"
+msgstr "恢复上一版"
+
+msgid "Saving checks the adapted configuration. Remote updates preserve your local interception settings."
+msgstr "保存时检查适配后的配置。订阅更新会保留本地接管设置。"
+
+msgid "Select a profile"
+msgstr "选择配置"
+
+msgid "Subscription URL"
+msgstr "订阅地址"
+
+msgid "Switch to native mode and restart HomeProxy with this profile? Local interception and access controls are retained."
+msgstr "切换到原生模式并使用此配置重启 HomeProxy？本地接管和访问控制设置会保留。"
+
+msgid "This is the original configuration, including credentials. Subscription inbounds are replaced when applied."
+msgstr "这是包含凭据的原始配置。应用时会替换订阅自带的入站。"
+
+msgid "This tag is not in the selected profile."
+msgstr "当前配置中没有此标记。"
+
+msgid "Updated"
+msgstr "更新时间"
+
+msgid "Use profile"
+msgstr "启用配置"
+
+msgid "Use profile default"
+msgstr "使用配置原值"
+
+msgid "Validate"
+msgstr "校验"
+
+msgid "Validate and save"
+msgstr "校验并保存"
+
+msgid "View"
+msgstr "查看"
+
+msgid "Use profile default (%s)"
+msgstr "使用配置原值（%s）"
+
+msgid "Not specified"
+msgstr "未指定"
+
+msgid "Select a profile first"
+msgstr "请先选择配置"
+
+msgid "Select the complete configuration to use. Manage subscriptions and imported files on the Native profiles page."
+msgstr "选择要使用的完整配置。订阅和导入文件可在“原生配置”页面管理。"
+
+msgid "Used for connections not matched by a routing rule. The value in parentheses comes from the selected profile; if no final outbound is specified, its first outbound is used. Explicit routing rules still take precedence."
+msgstr "用于未匹配路由规则的连接。括号内显示所选配置的默认出站；配置未指定默认出站时，使用第一个出站。明确匹配的路由规则仍优先生效。"
+
+msgid "Resolves domain names used by outbound connections, including proxy server addresses. The value in parentheses is the profile resolver tag, not the default DNS server for LAN queries. Individual outbounds may specify their own resolver. Not specified means no profile-wide resolver is configured."
+msgstr "用于解析出站连接使用的域名，包括代理服务器地址。括号内是配置中的解析器标记，不是局域网 DNS 查询的默认服务器。各出站可以指定自己的解析器。“未指定”表示配置没有统一设置默认解析器。"
+
+msgid "Controls UDP mappings in the core, not the router firewall NAT. Endpoint independent reuses one mapping for all destinations; address dependent separates destinations by IP; address and port dependent separates them by IP and port. The default is endpoint independent."
+msgstr "控制核心内部的 UDP 映射，不修改路由器防火墙 NAT。端点独立：访问不同目标时复用映射；地址相关：按目标 IP 分别建立映射；地址和端口相关：按目标 IP 和端口分别建立映射。默认为端点独立。"
+
+msgid "Controls which replies the core accepts for a UDP mapping. Endpoint independent accepts any remote endpoint; address dependent accepts IPs already contacted; address and port dependent accepts only IP and port pairs already contacted. This does not enable UDP support on a proxy node."
+msgstr "控制核心为 UDP 映射接收哪些回包。端点独立：接受任意远端；地址相关：只接受已发送过数据的远端 IP；地址和端口相关：只接受已发送过数据的远端 IP 与端口组合。此选项不能让不支持 UDP 的代理节点获得 UDP 能力。"
+
+msgid "Maximum UDP NAT sessions maintained by the core. When full, the least recently used session is closed. Empty or 0 lets sing-box choose a limit based on system memory; this does not change the router connection-tracking limit."
+msgstr "核心维护的 UDP NAT 会话数量上限。达到上限时关闭最久未使用的会话。留空或填写 0 时由 sing-box 根据系统内存自动选择；不修改路由器的连接跟踪数量上限。"
+
+msgid "Idle time in seconds before a UDP NAT session expires. Empty uses the core default of 300 seconds. This is not a connection-test timeout."
+msgstr "UDP NAT 会话空闲多久后回收，单位为秒。留空使用核心默认值 300 秒。这不是连接检查的超时时间。"
+
+msgid "UDP NAT mapping"
+msgstr "UDP NAT 映射方式"
+
+msgid "UDP NAT filtering"
+msgstr "UDP NAT 过滤方式"
+
+msgid "Maximum UDP sessions"
+msgstr "UDP 会话数上限"
+
+msgid "Endpoint independent"
+msgstr "端点独立"
+
+msgid "Address dependent"
+msgstr "地址相关"
+
+msgid "Address and port dependent"
+msgstr "地址和端口相关"
+
+msgid "No entries."
+msgstr "暂无条目。"
+
+msgid "Added"
+msgstr "新增"
+
+msgid "Removed"
+msgstr "移除"
+
+msgid "Changed"
+msgstr "修改"
+
+msgid "Order"
+msgstr "顺序"
+
+msgid "Match conditions"
+msgstr "匹配条件"
+
+msgid "Target / options"
+msgstr "目标／选项"
+
+msgid "Selected · matches startup configuration"
+msgstr "已选用 · 与启动配置一致"
+
+msgid "Selected · pending configuration differs or runtime is unavailable"
+msgstr "已选用 · 待应用配置有差异或核心未运行"
+
+msgid "Not selected; viewing this profile does not activate it."
+msgstr "未选用；查看此配置不会启用它。"
+
+msgid "Configuration version"
+msgstr "配置版本"
+
+msgid "Original configuration"
+msgstr "原始配置"
+
+msgid "Pending configuration"
+msgstr "待应用配置"
+
+msgid "Current core startup configuration"
+msgstr "当前核心启动配置"
+
+msgid "Profile details"
+msgstr "配置详情"
+
+msgid "Item"
+msgstr "项目"
+
+msgid "Value"
+msgstr "值"
+
+msgid "Proxy nodes"
+msgstr "代理节点"
+
+msgid "Configured default"
+msgstr "配置默认选择"
+
+msgid "Members"
+msgstr "成员"
+
+msgid "Automatic selection"
+msgstr "自动选择"
+
+msgid "Group defaults shown here are configuration values. Live choices and latency are available in Observability or Dashboard."
+msgstr "这里显示的是配置中的默认选择。实际选择和延迟可在观测页或 Dashboard 查看。"
+
+msgid "Other outbounds"
+msgstr "其他出站"
+
+msgid "Rules are listed in configuration order. Non-terminal actions may continue to later rules. Remote rule-set contents are not expanded here."
+msgstr "规则按配置顺序展示。非终止动作可以继续匹配后续规则。此处不展开远程规则集的内部内容。"
+
+msgid "Rule sets"
+msgstr "规则集"
+
+msgid "Tag"
+msgstr "标记"
+
+msgid "Download outbound / HTTP client"
+msgstr "下载出站／HTTP 客户端"
+
+msgid "DNS servers"
+msgstr "DNS 服务器"
+
+msgid "DNS rules"
+msgstr "DNS 规则"
+
+msgid "These read-only views redact credentials and URL paths. Use View/Edit or Download from the profile actions when you need the original file."
+msgstr "只读视图会隐藏凭据和 URL 路径。需要完整原文件时，请在配置操作中选择查看、编辑或下载。"
+
+msgid "Configuration text"
+msgstr "配置文本"
+
+msgid "Original → pending changes"
+msgstr "原始配置 → 待应用配置的差异"
+
+msgid "Field"
+msgstr "字段"
+
+msgid "Change"
+msgstr "变更"
+
+msgid "Original"
+msgstr "原始值"
+
+msgid "Pending"
+msgstr "待应用值"
+
+msgid "Pending → current startup changes"
+msgstr "待应用配置 → 当前启动配置的差异"
+
+msgid "Current startup"
+msgstr "当前启动值"
+
+msgid "This is the current core startup snapshot, which may belong to another profile. It does not show live selector changes."
+msgstr "这是当前核心的启动配置快照，可能来自另一份配置，不包含运行中切换选择组的变化。"
+
+msgid "Generated from this profile and saved local settings; not a live configuration or a connectivity test. Unsaved client form changes are not included."
+msgstr "根据此配置和已保存的本地设置生成，不代表正在运行或已经通过连通性测试，不包含客户端页面中尚未保存的修改。"
+
+msgid "Downloaded or imported content, before HomeProxy adaptation."
+msgstr "下载或导入的原始内容，尚未经过 HomeProxy 适配。"
+
+msgid "Nodes & groups"
+msgstr "节点与选择组"
+
+msgid "Routing rules"
+msgstr "路由规则"
+
+msgid "Configuration & changes"
+msgstr "配置与差异"
+
+msgid "Loading profile details…"
+msgstr "正在加载配置详情…"
+
+msgid "Refresh details"
+msgstr "刷新详情"
+
+msgid "Selected · changes pending"
+msgstr "已选用 · 有变更待应用"
+
+msgid "Selected · runtime unavailable"
+msgstr "已选用 · 核心未运行"
+
+msgid "Configuration details"
+msgstr "配置详情"
+
+msgid "View selected profile details"
+msgstr "查看所选配置详情"
+
+msgid "Opens the selected profile in a new tab without saving or applying this form. Details use saved local settings; unsaved changes are not included."
+msgstr "在新标签页打开所选配置，不会保存或应用此表单。详情使用已保存的本地设置，不包含未保存的修改。"
+
+msgid "More"
+msgstr "更多"
+
+msgid "Retry"
+msgstr "重试"
+
+msgid "Tailscale auth key"
+msgstr "Tailscale 认证密钥"
+
+msgid "Tailscale hostname"
+msgstr "Tailscale 主机名"
+
+msgid "Tailscale control URL"
+msgstr "Tailscale 控制服务器"
+
+msgid "Tailscale exit node"
+msgstr "Tailscale 退出节点"
+
+msgid "Tailscale state directory"
+msgstr "Tailscale 状态目录"
+
+msgid "Taildrop directory"
+msgstr "Taildrop 接收目录"
+
+msgid "Tailscale interface name"
+msgstr "Tailscale 接口名称"
+
+msgid "Ephemeral Tailscale device"
+msgstr "临时 Tailscale 设备"
+
+msgid "Accept tailnet routes"
+msgstr "接受 Tailnet 路由"
+
+msgid "Allow LAN access with exit node"
+msgstr "使用退出节点时允许局域网直连"
+
+msgid "Advertise as exit node"
+msgstr "通告为退出节点"
+
+msgid "Create Tailscale system interface"
+msgstr "创建 Tailscale 系统接口"
+
+msgid "Enable Tailscale SSH"
+msgstr "启用 Tailscale SSH"
+
+msgid "Disable SSH PTY"
+msgstr "禁用 SSH 终端分配"
+
+msgid "Disable SSH SFTP"
+msgstr "禁用 SSH SFTP"
+
+msgid "Disable SSH forwarding"
+msgstr "禁用 SSH 转发"
+
+msgid "Advertised tailnet subnets"
+msgstr "通告的 Tailnet 子网"
+
+msgid "Advertised Tailscale tags"
+msgstr "通告的 Tailscale 标签"
+
+msgid "Relay static endpoints"
+msgstr "中继静态端点"
+
+msgid "Tailscale UDP port"
+msgstr "Tailscale UDP 端口"
+
+msgid "Tailscale relay port"
+msgstr "Tailscale 中继端口"
+
+msgid "Tailscale interface MTU"
+msgstr "Tailscale 接口 MTU"
+
+msgid "Tailscale UDP idle timeout"
+msgstr "Tailscale UDP 空闲超时"
+
+msgid "Selector group"
+msgstr "手动选择组"
+
+msgid "Automatic selection group"
+msgstr "自动选择组"
+
+msgid "Group members"
+msgstr "组成员"
+
+msgid "Default group member"
+msgstr "默认组成员"
+
+msgid "First member"
+msgstr "第一个成员"
+
+msgid "Default must be a group member."
+msgstr "默认节点必须属于该组。"
+
+msgid "Test interval (seconds)"
+msgstr "测试间隔（秒）"
+
+msgid "Tolerance (milliseconds)"
+msgstr "容差（毫秒）"
+
+msgid "Idle timeout (seconds)"
+msgstr "空闲超时（秒）"
+
+msgid "Interrupt existing connections on switch"
+msgstr "切换时中断现有连接"
+
+msgid "Use an HTTPS URL."
+msgstr "请使用 HTTPS 地址。"
+
+msgid "Use an absolute directory path."
+msgstr "请使用绝对目录路径。"
+
+msgid "Optional for first login. Without a key, obtain the login URL from core logs or the Dashboard Tailscale tools. Existing state is reused."
+msgstr "首次登录可选填密钥。未填写时可从核心日志或 Dashboard 的 Tailscale 工具中取得登录链接。已有状态会复用。"
+
+msgid "Name advertised to the tailnet. Empty uses the system hostname."
+msgstr "向 Tailnet 通告的设备名。留空使用系统主机名。"
+
+msgid "Empty uses the official coordination server. Set an HTTPS URL for another compatible control server."
+msgstr "留空使用官方协调服务器。使用其他兼容控制服务器时填写 HTTPS 地址。"
+
+msgid "Name or IP of the exit node. Without an exit node this endpoint provides tailnet access, not a general Internet proxy."
+msgstr "退出节点的名称或 IP。未指定退出节点时，此端点用于访问 Tailnet，不能作为通用互联网代理。"
+
+msgid "Empty uses a private persistent directory per node under /etc/homeproxy/tailscale/. Keep it to preserve device identity across restarts."
+msgstr "留空时在 /etc/homeproxy/tailscale/ 下为每个节点使用独立的私有持久目录。保留该目录可在重启后沿用设备身份。"
+
+msgid "Empty uses a Taildrop subdirectory of this node’s state directory. Received files consume router storage; choose external storage for large files."
+msgstr "留空使用该节点状态目录下的 Taildrop 子目录。接收文件会占用路由器存储，大文件建议使用外部存储。"
+
+msgid "Optional name for the system TUN interface. Avoid names already used by HomeProxy or other services."
+msgstr "系统 TUN 接口名称，可选填。请避免与 HomeProxy 或其他服务的接口重名。"
+
+msgid "Register a temporary device rather than a permanent tailnet member."
+msgstr "注册为临时设备，而非持久 Tailnet 成员。"
+
+msgid "Accept subnet routes advertised by other tailnet devices."
+msgstr "接受其他 Tailnet 设备通告的子网路由。"
+
+msgid "Allow locally accessible subnets to bypass the exit node. Availability also depends on advertised routes."
+msgstr "允许本地可达子网绕过退出节点。实际可达性还取决于通告的路由。"
+
+msgid "Offer this device as an exit node. Approval and access policy are managed in the Tailscale administration console."
+msgstr "将本设备通告为退出节点。批准和访问策略在 Tailscale 管理控制台配置。"
+
+msgid "Create an additional system TUN interface. This is separate from HomeProxy traffic interception and requires kmod-tun."
+msgstr "创建额外的系统 TUN 接口，与 HomeProxy 流量接管接口不同，需要 kmod-tun。"
+
+msgid "Serve SSH on tailnet port 22 using local system accounts and Tailscale SSH access policies."
+msgstr "在 Tailnet 的 22 端口提供 SSH，使用本地系统账户和 Tailscale SSH 访问策略。"
+
+msgid "Refuse terminal allocation for Tailscale SSH."
+msgstr "拒绝为 Tailscale SSH 分配终端。"
+
+msgid "Refuse SFTP over Tailscale SSH."
+msgstr "拒绝通过 Tailscale SSH 使用 SFTP。"
+
+msgid "Refuse TCP, Unix-socket and agent forwarding over Tailscale SSH."
+msgstr "拒绝通过 Tailscale SSH 进行 TCP、Unix 套接字和代理转发。"
+
+msgid "Empty or 0 selects an automatic peer-to-peer UDP port."
+msgstr "留空或填 0 时自动选择对等连接 UDP 端口。"
+
+msgid "Optional UDP port for peer relay connections. Leave empty to retain the default."
+msgstr "对等中继连接使用的 UDP 端口，可选填。留空保留默认行为。"
+
+msgid "Empty uses the Tailscale default MTU."
+msgstr "留空使用 Tailscale 默认 MTU。"
+
+msgid "Seconds. Empty uses 300 seconds."
+msgstr "单位为秒。留空使用 300 秒。"
+
+msgid "Select nodes and groups directly from the node library in routing rules. Existing routing-node overrides remain editable."
+msgstr "路由规则可直接选择节点库中的节点和组。已有路由节点的覆盖设置仍可编辑。"
+
+msgid "Supports sing-box JSON nodes and groups, SIP008, and proxy share-link subscriptions. DNS and routing rules are not imported."
+msgstr "支持 sing-box JSON 节点与组、SIP008 和代理分享链接订阅。不导入 DNS 与路由规则。"
+
+msgid "No members"
+msgstr "暂无成员"
+
+msgid "Missing node (%s)"
+msgstr "节点不存在（%s）"
+
+msgid "Not in this group (%s)"
+msgstr "不属于本组（%s）"
+
+msgid "Node / group details"
+msgstr "节点 / 组详情"
+
+msgid "%s members"
+msgstr "%s 个成员"
+
+msgid "Default: %s"
+msgstr "默认：%s"
+
+msgid "Automatic latency selection"
+msgstr "自动按延迟选择"
+
+msgid "Exit node: %s"
+msgstr "出口节点：%s"
+
+msgid "Tailnet access"
+msgstr "访问 Tailnet"
+
+msgid "Direct connection"
+msgstr "直接连接"
+
+msgid "Select existing nodes or groups. Nested groups are supported; self references and dependency cycles are not allowed."
+msgstr "选择已有节点或组。支持嵌套组，但不允许引用自身或循环依赖。"
+
+msgid "HTTP URL requested through each member to compare latency."
+msgstr "通过各成员请求此 HTTP 地址，以比较延迟。"
+
+msgid "Interval between automatic latency checks. Empty uses the core default."
+msgstr "自动检查延迟的间隔。留空使用核心默认值。"
+
+msgid "Latency difference tolerated before switching to a faster member. Empty uses the core default."
+msgstr "切换到更快成员前允许的延迟差值。留空使用核心默认值。"
+
+msgid "Pause periodic checks after the group is idle. Empty uses the core default."
+msgstr "组空闲达到此时间后暂停定期检查。留空使用核心默认值。"
+
+msgid "When enabled, switching members interrupts existing connections as well as affecting new connections."
+msgstr "启用后，切换成员也会中断已有连接。"
+
+msgid "Tools"
+msgstr "工具"
+
+msgid "Core default"
+msgstr "核心默认值"
+
+msgid "Connection state"
+msgstr "连接状态"
+
+msgid "Connection sorting"
+msgstr "连接排序"
+
+msgid "Active"
+msgstr "活动"
+
+msgid "Closed"
+msgstr "已关闭"
+
+msgid "Newest first"
+msgstr "最新优先"
+
+msgid "Uploaded bytes"
+msgstr "上传总量"
+
+msgid "Downloaded bytes"
+msgstr "下载总量"
+
+msgid "Close all connections"
+msgstr "关闭全部连接"
+
+msgid "This closes all connections in the selected core instance, including those hidden by filters."
+msgstr "将关闭所选核心实例的全部连接，包括被筛选条件隐藏的连接。"
+
+msgid "STUN / NAT test"
+msgstr "STUN / NAT 检测"
+
+msgid "Network quality"
+msgstr "网络质量"
+
+msgid "Server / URL"
+msgstr "服务器 / URL"
+
+msgid "Start"
+msgstr "开始"
+
+msgid "External address"
+msgstr "外部地址"
+
+msgid "NAT mapping"
+msgstr "NAT 映射"
+
+msgid "NAT filtering"
+msgstr "NAT 过滤"
+
+msgid "Server does not support NAT classification"
+msgstr "服务器不支持 NAT 分类"
+
+msgid "Elapsed"
+msgstr "已用时间"
+
+msgid "Idle latency"
+msgstr "空闲延迟"
+
+msgid "Download capacity"
+msgstr "下载容量"
+
+msgid "Upload capacity"
+msgstr "上传容量"
+
+msgid "Download responsiveness"
+msgstr "下载负载响应能力"
+
+msgid "Upload responsiveness"
+msgstr "上传负载响应能力"
+
+msgid "Test ended without a final result."
+msgstr "测试结束，但未收到最终结果。"
+
+msgid "Completed"
+msgstr "已完成"
+
+msgid "Waiting for Tailscale status…"
+msgstr "正在等待 Tailscale 状态…"
+
+msgid "No running Tailscale endpoints."
+msgstr "没有运行中的 Tailscale 端点。"
+
+msgid "Log in to Tailscale"
+msgstr "登录 Tailscale"
+
+msgid "Online"
+msgstr "在线"
+
+msgid "Offline"
+msgstr "离线"
+
+msgid "Relay"
+msgstr "中继"
+
+msgid "Probe UDP connectivity, external address and NAT behavior through the selected outbound. NAT classification requires server support."
+msgstr "通过所选出站检测 UDP 连通性、外部地址和 NAT 行为。NAT 分类需要服务器支持。"
+
+msgid "This test generates download and upload traffic for up to 20 seconds. Start it only when you want to measure capacity and responsiveness under load."
+msgstr "此测试会产生下载和上传流量，测试时长最多 20 秒。需要测量容量及负载下的响应能力时再启动。"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Observability settings"
+msgstr "观测设置"
+
+msgid "Allow LAN Dashboard connections"
+msgstr "允许局域网 Dashboard 连接"
+
+msgid "Local monitoring uses an internal API automatically. Applying connection settings restarts HomeProxy."
+msgstr "本地观测自动使用内部 API。应用连接设置会重启 HomeProxy。"
+
+msgid "Off: only this router can access the core API. On: trusted browsers on your LAN can connect directly."
+msgstr "关闭时仅允许路由器自身访问核心 API。开启后，局域网内受信任的浏览器可以直接连接。"
+
+msgid "LAN listen address"
+msgstr "局域网监听地址"
+
+msgid "Leave empty to use the LAN IPv4 address. This does not open WAN firewall access."
+msgstr "留空使用 LAN 的 IPv4 地址。此选项不会开放 WAN 防火墙访问。"
+
+msgid "Allowed Dashboard origins"
+msgstr "允许的 Dashboard 来源"
+
+msgid "Enter trusted Dashboard origins, for example https://sing-box-dashboard.sagernet.org. Browser HTTPS and local-network permissions still apply."
+msgstr "填写受信任的 Dashboard 来源，例如 https://sing-box-dashboard.sagernet.org。仍需满足浏览器的 HTTPS 和本地网络访问权限要求。"
+
+msgid "Connection secret"
+msgstr "连接密钥"
+
+msgid "Advanced connection settings"
+msgstr "高级连接设置"
+
+msgid "Provide both TLS certificate and private key, or leave both empty."
+msgstr "请同时填写 TLS 证书和私钥，或将两项均留空。"
+
+msgid "Excluded rule sets"
+msgstr "排除的规则集"
+
+msgid "Also require that none of these rule sets match. Combined with the other conditions using AND."
+msgstr "同时要求这些规则集均不匹配，与其他条件按 AND 组合。"
+
+msgid "Search groups or members"
+msgstr "搜索组或成员"
+
+msgid "Expand all"
+msgstr "全部展开"
+
+msgid "Collapse all"
+msgstr "全部折叠"
+
+msgid "No matching groups or members."
+msgstr "没有匹配的组或成员。"
+
+msgid "Manual selection"
+msgstr "手动选择"
+
+msgid "Testing…"
+msgstr "测试中…"
+
+msgid "Switching…"
+msgstr "切换中…"
+
+msgid "Latency test requested. Results update automatically."
+msgstr "已请求延迟测试，结果将自动更新。"
+
+msgid "Selection updated."
+msgstr "已更新选择。"
+
+msgid "Creation method"
+msgstr "创建方式"
+
+msgid "Configure directly"
+msgstr "直接配置"
+
+msgid "Reference an existing node"
+msgstr "引用已有节点"
+
+msgid "Base node"
+msgstr "基础节点"
+
+msgid "Inherited configuration"
+msgstr "继承的配置"
+
+msgid "Inherit server, authentication, TLS and transport settings. Local overrides are kept separately."
+msgstr "继承服务器、认证、TLS 和传输设置。本地覆盖项单独保存。"
+
+msgid "Protocol-specific fields follow the base node. Edit that node to change them; this entry only overrides how it is reached."
+msgstr "协议参数跟随基础节点更新。如需修改这些参数，请编辑基础节点；此处只覆盖连接方式。"
+
+msgid "Upstream outbound"
+msgstr "上游出站"
+
+msgid "Connect to this proxy through the selected outbound. An empty override inherits the original setting; direct connection clears an inherited upstream."
+msgstr "通过所选出站连接此代理。留空继承原设置；选择直接连接可清除继承的上游。"
+
+msgid "Inherit original setting"
+msgstr "继承原设置"
+
+msgid "Connect directly"
+msgstr "直接连接"
+
+msgid "Original upstream"
+msgstr "原始上游"
+
+msgid "Inherited from the base node"
+msgstr "继承基础节点的设置"
+
+msgid "Override interface"
+msgstr "覆盖绑定接口"
+
+msgid "Used for a direct connection to the proxy server. Leave empty to inherit. Dial fields such as interface binding are ignored when an upstream is set."
+msgstr "直接连接代理服务器时使用。留空继承原设置。指定上游后，接口绑定等拨号设置由上游处理。"
+
+msgid "Override server address resolver"
+msgstr "覆盖服务器地址解析器"
+
+msgid "Custom DNS servers are available only in custom routing mode. An unavailable resolver prevents applying the configuration."
+msgstr "自定义 DNS 服务器仅在自定义路由模式下可用。解析器不可用时将阻止应用配置。"
+
+msgid "Use routing default"
+msgstr "使用路由默认值"
+
+msgid "Override address strategy"
+msgstr "覆盖地址解析策略"
+
+msgid "Reference"
+msgstr "引用节点"
+
+msgid "Reference: %s"
+msgstr "引用：%s"
+
+msgid "Via %s"
+msgstr "经由 %s"
+
+msgid "Select a base node."
+msgstr "请选择基础节点。"
+
+msgid "Choose a proxy node as the base, not a group or endpoint."
+msgstr "请选择普通代理节点作为基础节点，不支持以组或端点作为基础。"
+
+msgid "Circular node dependency: %s"
+msgstr "节点循环依赖：%s"
+
+msgid "Group must contain at least one member."
+msgstr "组中至少需要一个成员。"
+
+#: client.js
+msgid "System uses the operating system network stack; mixed and gVisor require the corresponding core support."
+msgstr "系统使用操作系统网络栈；mixed 和 gVisor 需要核心包含相应支持。"
+
+#: client.js
+msgid "Automatic"
+msgstr "自动"
+
+#: client.js
+msgid "Optimistic DNS cache"
+msgstr "乐观 DNS 缓存"
+
+#: client.js
+msgid "Return expired cached answers while refreshing them in the background."
+msgstr "返回已过期的缓存应答，同时在后台刷新。"
+
+#: client.js
+msgid "DNS query timeout (seconds)"
+msgstr "DNS 查询超时（秒）"
+
+#: client.js
+msgid "Persist DNS cache"
+msgstr "持久化 DNS 缓存"
+
+#: client.js
+msgid "Store complete DNS responses until their TTL expires. Runtime storage is cleared on router reboot."
+msgstr "保存完整 DNS 应答直至 TTL 到期。运行时存储会在路由器重启后清空。"
+
+#: client.js
+msgid "Match DNS response"
+msgstr "匹配 DNS 应答"
+
+#: client.js
+msgid "Evaluate a DNS response before matching IP filters or IP rule sets."
+msgstr "先解析 DNS 应答，再匹配 IP 条件或 IP 规则集。"
+
+#: client.js
+msgid "Evaluation DNS server"
+msgstr "用于解析的 DNS 服务器"
+
+#: client.js
+msgid "UCI DNS server section or default-dns/system-dns. Defaults to this rule’s DNS server."
+msgstr "填写 UCI DNS 服务器标识或 default-dns/system-dns；默认使用本规则的 DNS 服务器。"
+
+#: client.js
+msgid "Return evaluated response"
+msgstr "返回解析结果"
+
+#: client.js
+msgid "Restrict DNS answers to one address family. Ordering preferences belong to the resolver settings."
+msgstr "将 DNS 应答限制为单一地址族。地址顺序偏好请在解析器中设置。"
+
+#: observe-settings.js
+msgid "Save & Apply"
+msgstr "保存并应用"
+
+#: observability.js
+msgid "Tailscale"
+msgstr "Tailscale"
+
+#: node.js
+msgid "Initial selection when the core starts. Runtime switching is available in Dashboard; the first member is used when unset."
+msgstr "核心启动时的初始选择。运行时可在 Dashboard 中切换；未设置时使用第一个成员。"
+
+#: node.js
+msgid "Gecko"
+msgstr "Gecko"
+
+#: node.js
+msgid "Pinned certificate public key SHA256"
+msgstr "固定证书公钥 SHA256"
+
+#: observability.js
+msgid "All"
+msgstr "全部"
+
+#: observability.js
+msgid "Latency"
+msgstr "延迟"
+
+#: observability.js
+msgid "Unknown"
+msgstr "未知"
+
+#: observability.js
+msgid "Ping"
+msgstr "Ping"
+
+msgid "The core sends its buffered logs first, then live updates. This page keeps up to 3000 entries and displays up to 1000. Reconnecting replaces the view with the core buffer; file logs are separate."
+msgstr "核心先发送缓冲日志，再推送实时更新。本页最多保留 3000 条、显示 1000 条；重连时用核心缓冲替换当前记录。文件日志独立保存。"
+
+msgid "API TLS server name"
+msgstr "API TLS 服务器名称"
+
+msgid "Certificate DNS name used by the internal relay; connects to the configured listen address. Leave empty for an IP certificate."
+msgstr "内部转发校验证书时使用的域名，实际连接配置的监听地址。使用 IP 证书时留空。"
+
+msgid "Another test is running."
+msgstr "已有测试正在运行。"
+
+msgid "Display paused; log subscription is stopped."
+msgstr "显示已暂停，日志订阅已停止。"
+
+msgid "Only traffic entering this core is listed. Internal node latency tests are not proxy connections. All includes closed connections retained by the core or this page."
+msgstr "仅显示进入当前核心的代理连接，核心内部的节点延迟测试不计入。“全部”包含核心或本页面仍保留的已关闭连接。"
+
+msgid "No retained closed connections."
+msgstr "没有保留的已关闭连接。"
+
+msgid "No connections have been reported by this core. Send traffic through its proxy entry to verify."
+msgstr "当前核心尚未报告连接。可通过它的代理入口发送请求进行验证。"
+
+msgid "Read-only access"
+msgstr "只读访问"
+
+msgid "These nodes are still referenced. Update these settings before removing them:"
+msgstr "这些节点仍被引用，请先处理以下设置再删除："

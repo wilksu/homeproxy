@@ -3,22 +3,57 @@
 		"description": "Grant access to homeproxy configuration",
 		"read": {
 			"file": {
-				"/etc/homeproxy/scripts/update_subscriptions.uc": [ "exec" ],
-				"/var/run/homeproxy/homeproxy.log": [ "read" ],
-				"/var/run/homeproxy/sing-box-c.log": [ "read" ],
-				"/var/run/homeproxy/sing-box-s.log": [ "read" ]
+				"/var/run/homeproxy/homeproxy.log": [
+					"read"
+				],
+				"/var/run/homeproxy/sing-box-c.log": [
+					"read"
+				],
+				"/var/run/homeproxy/sing-box-s.log": [
+					"read"
+				]
 			},
 			"ubus": {
-				"service": [ "list" ],
-				"luci.homeproxy": [ "*" ]
+				"service": [
+					"list"
+				],
+				"luci.homeproxy": [
+					"api_read",
+					"runtime",
+					"acllist_read",
+					"singbox_get_features",
+					"resources_get_version",
+					"connection_check"
+				]
 			},
-			"uci": [ "homeproxy" ]
+			"uci": [
+				"homeproxy"
+			]
 		},
 		"write": {
 			"file": {
-				"/tmp/homeproxy_certificate.tmp": [ "write" ]
+				"/tmp/homeproxy_certificate.tmp": [
+					"write"
+				],
+				"/etc/homeproxy/scripts/update_subscriptions.uc": [
+					"exec"
+				]
 			},
-			"uci": [ "homeproxy" ]
+			"uci": [
+				"homeproxy"
+			],
+			"ubus": {
+				"luci.homeproxy": [
+					"api_control",
+					"api_secret",
+					"diagnose",
+					"acllist_write",
+					"certificate_write",
+					"log_clean",
+					"singbox_generator",
+					"resources_update"
+				]
+			}
 		}
 	}
 }

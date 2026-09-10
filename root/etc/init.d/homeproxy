@@ -27,7 +27,73 @@ log() {
 	echo -e "$(date "+%Y-%m-%d %H:%M:%S") [DAEMON] $*" >> "$LOG_PATH"
 }
 
+# Build and check candidates before touching a running service or its firewall.
+prepare_configs_inner() {
+	config_load "$CONF"
+	mkdir -p "$RUN_DIR"
+	"$HP_DIR/scripts/prepare.sh" || return 1
+	local mode node enabled
+	config_get mode config routing_mode bypass_mainland_china
+	if [ "$mode" = custom ]; then
+		config_get node routing default_outbound nil
+	else
+		config_get node config main_node nil
+	fi
+	config_get_bool enabled server enabled 0
+	# Apply restoration masks before generating or checking dormant instances.
+	[ "${HP_START_CLIENT:-1}" != 0 ] || node=nil
+	[ "${HP_START_SERVER:-1}" != 0 ] || enabled=0
+	HP_PREPARED_DIR="$(mktemp -d "$RUN_DIR/candidate.XXXXXX")" || return 1
+	chmod 700 "$HP_PREPARED_DIR"
+	if [ "$node" != nil ]; then
+		HP_OUTPUT_DIR="$HP_PREPARED_DIR" ucode -S "$HP_DIR/scripts/generate_client.uc" 2>>"$LOG_PATH" || return 1
+	fi
+	if [ "$enabled" = 1 ]; then
+		HP_OUTPUT_DIR="$HP_PREPARED_DIR" ucode -S "$HP_DIR/scripts/generate_server.uc" 2>>"$LOG_PATH" || return 1
+	fi
+	local candidate
+	set --
+	for candidate in "$HP_PREPARED_DIR"/sing-box-*.json; do
+		[ -f "$candidate" ] || continue
+		set -- "$@" "$candidate"
+	done
+	if [ "$#" -gt 0 ]; then
+		ucode -S "$HP_DIR/scripts/validate.uc" "$@" >>"$LOG_PATH" 2>&1 || {
+			log "Candidate rejected; existing service configuration preserved."
+			rm -rf "$HP_PREPARED_DIR"
+			HP_PREPARED_DIR=""
+			return 1
+		}
+	fi
+}
+
+prepare_configs() {
+	if prepare_configs_inner; then return 0; fi
+	[ -z "$HP_PREPARED_DIR" ] || rm -rf "$HP_PREPARED_DIR"
+	HP_PREPARED_DIR=""
+	return 1
+}
+
+install_configs() {
+	local candidate
+	for candidate in "$HP_PREPARED_DIR"/sing-box-*.json "$HP_PREPARED_DIR"/sing-box-*.sources; do
+		[ -f "$candidate" ] || continue
+		chmod 600 "$candidate"
+		mv "$candidate" "$RUN_DIR/"
+	done
+	rmdir "$HP_PREPARED_DIR"
+	HP_PREPARED_DIR=""
+}
+
+restart() {
+	prepare_configs || return 1
+	stop
+	start
+}
+
 start_service() {
+	[ -n "$HP_PREPARED_DIR" ] || prepare_configs || return 1
+	install_configs
 	config_load "$CONF"
 
 	local routing_mode proxy_mode
@@ -43,6 +109,9 @@ start_service() {
 
 	local server_enabled
 	config_get_bool server_enabled "server" "enabled" "0"
+	# Subscription activation preserves which instances were actually running.
+	[ "${HP_START_CLIENT:-1}" != 0 ] || outbound_node=nil
+	[ "${HP_START_SERVER:-1}" != 0 ] || server_enabled=0
 
 	if [ "$outbound_node" = "nil" ] && [ "$server_enabled" = "0" ]; then
 		return 1
@@ -51,16 +120,6 @@ start_service() {
 	mkdir -p "$RUN_DIR"
 
 	if [ "$outbound_node" != "nil" ]; then
-		# Generate/Validate client config
-		ucode -S "$HP_DIR/scripts/generate_client.uc" 2>>"$LOG_PATH"
-
-		if [ ! -e "$RUN_DIR/sing-box-c.json" ]; then
-			log "Error: failed to generate client configuration."
-			return 1
-		elif ! "$PROG" check --config "$RUN_DIR/sing-box-c.json" 2>>"$LOG_PATH"; then
-			log "Error: wrong client configuration detected."
-			return 1
-		fi
 
 		# Auto update
 		local auto_update auto_update_time
@@ -152,7 +211,7 @@ start_service() {
 		# QUIC-GO GSO is broken on kernel 6.6 currently
 		uname -r | grep -Eq "^6\.6" && procd_set_param env "QUIC_GO_DISABLE_GSO"="true"
 
-		if [ -x "/sbin/ujail" ] && [ "$routing_mode" != "custom" ] && ! grep -Eq '"type": "(wireguard|tun)"' "$RUN_DIR/sing-box-c.json"; then
+		if [ -x "/sbin/ujail" ] && [ "$routing_mode" != "custom" ] && ! grep -Eq '"type": "(wireguard|tailscale|tun)"' "$RUN_DIR/sing-box-c.json"; then
 			procd_add_jail "sing-box-c" log procfs
 			procd_add_jail_mount "$RUN_DIR/sing-box-c.json"
 			procd_add_jail_mount_rw "$RUN_DIR/sing-box-c.log"
@@ -176,16 +235,6 @@ start_service() {
 	fi
 
 	if [ "$server_enabled" = "1" ]; then
-		# Generate/Validate server config
-		ucode -S "$HP_DIR/scripts/generate_server.uc" 2>>"$LOG_PATH"
-
-		if [ ! -e "$RUN_DIR/sing-box-s.json" ]; then
-			log "Error: failed to generate server configuration."
-			return 1
-		elif ! "$PROG" check --config "$RUN_DIR/sing-box-s.json" 2>>"$LOG_PATH"; then
-			log "Error: wrong server configuration detected."
-			return 1
-		fi
 
 		# sing-box (server)
 		procd_open_instance "sing-box-s"
@@ -236,9 +285,9 @@ start_service() {
 		;;
 	esac
 
-	[ "$outbound_node" = "nil" ] || echo > "$RUN_DIR/sing-box-c.log"
+	[ "$outbound_node" = "nil" ] || touch "$RUN_DIR/sing-box-c.log"
 	if [ "$server_enabled" = "1" ]; then
-		echo > "$RUN_DIR/sing-box-s.log"
+		touch "$RUN_DIR/sing-box-s.log"
 		mkdir -p "$HP_DIR/certs"
 	fi
 
@@ -308,8 +357,7 @@ stop_service() {
 	rm -rf "$DNSMASQ_DIR/../dnsmasq-homeproxy.conf" "$DNSMASQ_DIR"
 	/etc/init.d/dnsmasq restart >"/dev/null" 2>&1
 
-	rm -f "$RUN_DIR/sing-box-c.json" "$RUN_DIR/sing-box-c.log" \
-		"$RUN_DIR/sing-box-s.json" "$RUN_DIR/sing-box-s.log"
+	rm -f "$RUN_DIR/sing-box-c.json" "$RUN_DIR/sing-box-s.json" "$RUN_DIR/sing-box-c.sources" "$RUN_DIR/sing-box-s.sources"
 
 	log "Service stopped."
 }
@@ -328,8 +376,7 @@ service_stopped() {
 reload_service() {
 	log "Reloading service..."
 
-	stop
-	start
+	restart
 }
 
 service_triggers() {

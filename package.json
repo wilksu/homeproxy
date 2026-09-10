@@ -1,0 +1,12 @@
+{
+  "name": "homeproxy-observability",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-api.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "protobufjs": "7.6.6"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "core_version": "1.14.0",
+  "core_package_version": "1.14.0-r1",
+  "core_source_sha256": "87baf6852e37941cbe40bdd94bec81c957c88a56751cecd6bbf0e6108bc69398",
+  "api_version": 4,
+  "dashboard_commit": "c285014d351a685d8a100db0d5bf47ad9bdad76f",
+  "dashboard_sha256": "8de8de232f7e5073bfdd93a859c75691966fa6aef20c01c38aeb61da1791b0bd",
+  "dashboard_package_version": "2026.09.03-r1",
+  "sdk_url": "https://downloads.immortalwrt.org/releases/25.12.0/targets/mediatek/filogic/immortalwrt-sdk-25.12.0-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64.tar.zst",
+  "sdk_sha256": "befa29f07c7922876c875d53df753d5d7c2fe2ba4b15fb40c13a2ab38587f6c3"
+}

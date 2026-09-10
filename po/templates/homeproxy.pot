@@ -3049,3 +3049,1186 @@ msgstr ""
 #: htdocs/luci-static/resources/homeproxy.js:328
 msgid "valid uuid"
 msgstr ""
+
+msgid "Cloudflare DoH"
+msgstr ""
+
+msgid "AliDNS DoH"
+msgstr ""
+
+msgid "STUN server"
+msgstr ""
+
+msgid "Checking…"
+msgstr ""
+
+msgid "Start the paired core with API enabled first."
+msgstr ""
+
+msgid "No valid STUN response received."
+msgstr ""
+
+msgid "Timed out"
+msgstr ""
+
+msgid "Cancelled"
+msgstr ""
+
+msgid "Send STUN through the current UDP/default outbound and require a binding response. This does not test LAN interception or every UDP application."
+msgstr ""
+
+msgid "API and Dashboard settings"
+msgstr ""
+
+msgid "Cancelling after the current stage…"
+msgstr ""
+
+msgid "Cannot load API client"
+msgstr ""
+
+msgid "Close connection"
+msgstr ""
+
+msgid "Configuration sources"
+msgstr ""
+
+msgid "Connected"
+msgstr ""
+
+msgid "Connecting"
+msgstr ""
+
+msgid "Connecting to the core…"
+msgstr ""
+
+msgid "Connection details"
+msgstr ""
+
+msgid "Connections"
+msgstr ""
+
+msgid "Core"
+msgstr ""
+
+msgid "Core DNS · HTTPS"
+msgstr ""
+
+msgid "Core DNS · IPv4"
+msgstr ""
+
+msgid "Core DNS · IPv6"
+msgstr ""
+
+msgid "Core configuration"
+msgstr ""
+
+msgid "Core memory usage"
+msgstr ""
+
+msgid "Core/API version is outside the supported pairing."
+msgstr ""
+
+msgid "Current transfer rate"
+msgstr ""
+
+msgid "Dashboard is listening on router loopback. Configure a LAN address to open it from this browser."
+msgstr ""
+
+msgid "Destination"
+msgstr ""
+
+msgid "Details"
+msgstr ""
+
+msgid "Diagnosis finished"
+msgstr ""
+
+msgid "Diagnosis progress"
+msgstr ""
+
+msgid "Diagnostics"
+msgstr ""
+
+msgid "Dismiss"
+msgstr ""
+
+msgid "Display paused; new messages are still received."
+msgstr ""
+
+msgid "Domain diagnostics"
+msgstr ""
+
+msgid "Domain or URL"
+msgstr ""
+
+msgid "Download"
+msgstr ""
+
+msgid "Enter a domain or URL to inspect DNS, HTTP connectivity and routing."
+msgstr ""
+
+msgid "Export result"
+msgstr ""
+
+msgid "Filter connections"
+msgstr ""
+
+msgid "Filter domain, source, rule or outbound"
+msgstr ""
+
+msgid "Filter logs"
+msgstr ""
+
+msgid "Groups"
+msgstr ""
+
+msgid "HomeProxy observability"
+msgstr ""
+
+msgid "Inbound / outbound"
+msgstr ""
+
+msgid "Inspect"
+msgstr ""
+
+msgid "Instance"
+msgstr ""
+
+msgid "Live display"
+msgstr ""
+
+msgid "Live logs"
+msgstr ""
+
+msgid "Local list capped at 5000 connections"
+msgstr ""
+
+msgid "Log level"
+msgstr ""
+
+msgid "Logs"
+msgstr ""
+
+msgid "Memory"
+msgstr ""
+
+msgid "Migration review"
+msgstr ""
+
+msgid "Next"
+msgstr ""
+
+msgid "No active connections. New connections will appear here automatically."
+msgstr ""
+
+msgid "No connections match this filter."
+msgstr ""
+
+msgid "No log messages match the current filters."
+msgstr ""
+
+msgid "No outbound groups. A configuration using a single node may not create groups."
+msgstr ""
+
+msgid "Not running"
+msgstr ""
+
+msgid "Observability pages"
+msgstr ""
+
+msgid "Open official Dashboard"
+msgstr ""
+
+msgid "Operation completed."
+msgstr ""
+
+msgid "Outbound groups"
+msgstr ""
+
+msgid "Overview"
+msgstr ""
+
+msgid "Page"
+msgstr ""
+
+msgid "Pause display"
+msgstr ""
+
+msgid "Previous"
+msgstr ""
+
+msgid "Proxy HTTP connection"
+msgstr ""
+
+msgid "Refresh"
+msgstr ""
+
+msgid "Required"
+msgstr ""
+
+msgid "Resume display"
+msgstr ""
+
+msgid "Router HTTP connection"
+msgstr ""
+
+msgid "Routing configuration"
+msgstr ""
+
+msgid "Running"
+msgstr ""
+
+msgid "Running…"
+msgstr ""
+
+msgid "Select"
+msgstr ""
+
+msgid "Select the client instance for domain diagnostics."
+msgstr ""
+
+msgid "Selected"
+msgstr ""
+
+msgid "Source"
+msgstr ""
+
+msgid "Start diagnosis"
+msgstr ""
+
+msgid "System DNS · HTTPS"
+msgstr ""
+
+msgid "System DNS · IPv4"
+msgstr ""
+
+msgid "System DNS · IPv6"
+msgstr ""
+
+msgid "System environment"
+msgstr ""
+
+msgid "Test latency"
+msgstr ""
+
+msgid "Tests run from the router and the explicit proxy. LAN transparent interception needs traffic from the LAN device. Cancel stops subsequent stages; the active stage has a short timeout."
+msgstr ""
+
+msgid "The latest 3000 received entries are kept locally; at most 1000 are displayed. API logs can include debug messages while the file log level remains warn."
+msgstr ""
+
+msgid "The paired core must be running with API enabled. Check API settings and the HomeProxy startup log."
+msgstr ""
+
+msgid "Untested"
+msgstr ""
+
+msgid "Upload"
+msgstr ""
+
+msgid "Waiting for connections…"
+msgstr ""
+
+msgid "Waiting for log messages…"
+msgstr ""
+
+msgid "connections"
+msgstr ""
+
+msgid "A profile name is required."
+msgstr ""
+
+msgid "Actions"
+msgstr ""
+
+msgid "Add profile"
+msgstr ""
+
+msgid "Copy as local profile"
+msgstr ""
+
+msgid "Delete profile"
+msgstr ""
+
+msgid "Edit profile"
+msgstr ""
+
+msgid "Every 24 hours"
+msgstr ""
+
+msgid "Every 6 hours"
+msgstr ""
+
+msgid "Import a native profile first."
+msgstr ""
+
+msgid "Local configuration"
+msgstr ""
+
+msgid "Manage complete sing-box configurations. HomeProxy owns traffic interception, DNS ingress and the management API. Importing or updating a profile does not switch the running service."
+msgstr ""
+
+msgid "Manage native profiles"
+msgstr ""
+
+msgid "Manual updates"
+msgstr ""
+
+msgid "Maximum configuration size is 2 MiB"
+msgstr ""
+
+msgid "Native configuration"
+msgstr ""
+
+msgid "Native profile"
+msgstr ""
+
+msgid "Native profiles"
+msgstr ""
+
+msgid "No native profiles. Add a subscription or import a JSON file."
+msgstr ""
+
+msgid "Nodes / Groups"
+msgstr ""
+
+msgid "Profile updated. Apply it explicitly to restart the service."
+msgstr ""
+
+msgid "Remote subscription"
+msgstr ""
+
+msgid "Restore previous version"
+msgstr ""
+
+msgid "Saving checks the adapted configuration. Remote updates preserve your local interception settings."
+msgstr ""
+
+msgid "Select a profile"
+msgstr ""
+
+msgid "Subscription URL"
+msgstr ""
+
+msgid "Switch to native mode and restart HomeProxy with this profile? Local interception and access controls are retained."
+msgstr ""
+
+msgid "This is the original configuration, including credentials. Subscription inbounds are replaced when applied."
+msgstr ""
+
+msgid "This tag is not in the selected profile."
+msgstr ""
+
+msgid "Updated"
+msgstr ""
+
+msgid "Use profile"
+msgstr ""
+
+msgid "Use profile default"
+msgstr ""
+
+msgid "Validate"
+msgstr ""
+
+msgid "Validate and save"
+msgstr ""
+
+msgid "View"
+msgstr ""
+
+msgid "Use profile default (%s)"
+msgstr ""
+
+msgid "Not specified"
+msgstr ""
+
+msgid "Select a profile first"
+msgstr ""
+
+msgid "Select the complete configuration to use. Manage subscriptions and imported files on the Native profiles page."
+msgstr ""
+
+msgid "Used for connections not matched by a routing rule. The value in parentheses comes from the selected profile; if no final outbound is specified, its first outbound is used. Explicit routing rules still take precedence."
+msgstr ""
+
+msgid "Resolves domain names used by outbound connections, including proxy server addresses. The value in parentheses is the profile resolver tag, not the default DNS server for LAN queries. Individual outbounds may specify their own resolver. Not specified means no profile-wide resolver is configured."
+msgstr ""
+
+msgid "Controls UDP mappings in the core, not the router firewall NAT. Endpoint independent reuses one mapping for all destinations; address dependent separates destinations by IP; address and port dependent separates them by IP and port. The default is endpoint independent."
+msgstr ""
+
+msgid "Controls which replies the core accepts for a UDP mapping. Endpoint independent accepts any remote endpoint; address dependent accepts IPs already contacted; address and port dependent accepts only IP and port pairs already contacted. This does not enable UDP support on a proxy node."
+msgstr ""
+
+msgid "Maximum UDP NAT sessions maintained by the core. When full, the least recently used session is closed. Empty or 0 lets sing-box choose a limit based on system memory; this does not change the router connection-tracking limit."
+msgstr ""
+
+msgid "Idle time in seconds before a UDP NAT session expires. Empty uses the core default of 300 seconds. This is not a connection-test timeout."
+msgstr ""
+
+msgid "UDP NAT mapping"
+msgstr ""
+
+msgid "UDP NAT filtering"
+msgstr ""
+
+msgid "Maximum UDP sessions"
+msgstr ""
+
+msgid "Endpoint independent"
+msgstr ""
+
+msgid "Address dependent"
+msgstr ""
+
+msgid "Address and port dependent"
+msgstr ""
+
+msgid "No entries."
+msgstr ""
+
+msgid "Added"
+msgstr ""
+
+msgid "Removed"
+msgstr ""
+
+msgid "Changed"
+msgstr ""
+
+msgid "Order"
+msgstr ""
+
+msgid "Match conditions"
+msgstr ""
+
+msgid "Target / options"
+msgstr ""
+
+msgid "Selected · matches startup configuration"
+msgstr ""
+
+msgid "Selected · pending configuration differs or runtime is unavailable"
+msgstr ""
+
+msgid "Not selected; viewing this profile does not activate it."
+msgstr ""
+
+msgid "Configuration version"
+msgstr ""
+
+msgid "Original configuration"
+msgstr ""
+
+msgid "Pending configuration"
+msgstr ""
+
+msgid "Current core startup configuration"
+msgstr ""
+
+msgid "Profile details"
+msgstr ""
+
+msgid "Item"
+msgstr ""
+
+msgid "Value"
+msgstr ""
+
+msgid "Proxy nodes"
+msgstr ""
+
+msgid "Configured default"
+msgstr ""
+
+msgid "Members"
+msgstr ""
+
+msgid "Automatic selection"
+msgstr ""
+
+msgid "Group defaults shown here are configuration values. Live choices and latency are available in Observability or Dashboard."
+msgstr ""
+
+msgid "Other outbounds"
+msgstr ""
+
+msgid "Rules are listed in configuration order. Non-terminal actions may continue to later rules. Remote rule-set contents are not expanded here."
+msgstr ""
+
+msgid "Rule sets"
+msgstr ""
+
+msgid "Tag"
+msgstr ""
+
+msgid "Download outbound / HTTP client"
+msgstr ""
+
+msgid "DNS servers"
+msgstr ""
+
+msgid "DNS rules"
+msgstr ""
+
+msgid "These read-only views redact credentials and URL paths. Use View/Edit or Download from the profile actions when you need the original file."
+msgstr ""
+
+msgid "Configuration text"
+msgstr ""
+
+msgid "Original → pending changes"
+msgstr ""
+
+msgid "Field"
+msgstr ""
+
+msgid "Change"
+msgstr ""
+
+msgid "Original"
+msgstr ""
+
+msgid "Pending"
+msgstr ""
+
+msgid "Pending → current startup changes"
+msgstr ""
+
+msgid "Current startup"
+msgstr ""
+
+msgid "This is the current core startup snapshot, which may belong to another profile. It does not show live selector changes."
+msgstr ""
+
+msgid "Generated from this profile and saved local settings; not a live configuration or a connectivity test. Unsaved client form changes are not included."
+msgstr ""
+
+msgid "Downloaded or imported content, before HomeProxy adaptation."
+msgstr ""
+
+msgid "Nodes & groups"
+msgstr ""
+
+msgid "Routing rules"
+msgstr ""
+
+msgid "Configuration & changes"
+msgstr ""
+
+msgid "Loading profile details…"
+msgstr ""
+
+msgid "Refresh details"
+msgstr ""
+
+msgid "Selected · changes pending"
+msgstr ""
+
+msgid "Selected · runtime unavailable"
+msgstr ""
+
+msgid "Configuration details"
+msgstr ""
+
+msgid "View selected profile details"
+msgstr ""
+
+msgid "Opens the selected profile in a new tab without saving or applying this form. Details use saved local settings; unsaved changes are not included."
+msgstr ""
+
+msgid "More"
+msgstr ""
+
+msgid "Retry"
+msgstr ""
+
+msgid "Tailscale auth key"
+msgstr ""
+
+msgid "Tailscale hostname"
+msgstr ""
+
+msgid "Tailscale control URL"
+msgstr ""
+
+msgid "Tailscale exit node"
+msgstr ""
+
+msgid "Tailscale state directory"
+msgstr ""
+
+msgid "Taildrop directory"
+msgstr ""
+
+msgid "Tailscale interface name"
+msgstr ""
+
+msgid "Ephemeral Tailscale device"
+msgstr ""
+
+msgid "Accept tailnet routes"
+msgstr ""
+
+msgid "Allow LAN access with exit node"
+msgstr ""
+
+msgid "Advertise as exit node"
+msgstr ""
+
+msgid "Create Tailscale system interface"
+msgstr ""
+
+msgid "Enable Tailscale SSH"
+msgstr ""
+
+msgid "Disable SSH PTY"
+msgstr ""
+
+msgid "Disable SSH SFTP"
+msgstr ""
+
+msgid "Disable SSH forwarding"
+msgstr ""
+
+msgid "Advertised tailnet subnets"
+msgstr ""
+
+msgid "Advertised Tailscale tags"
+msgstr ""
+
+msgid "Relay static endpoints"
+msgstr ""
+
+msgid "Tailscale UDP port"
+msgstr ""
+
+msgid "Tailscale relay port"
+msgstr ""
+
+msgid "Tailscale interface MTU"
+msgstr ""
+
+msgid "Tailscale UDP idle timeout"
+msgstr ""
+
+msgid "Selector group"
+msgstr ""
+
+msgid "Automatic selection group"
+msgstr ""
+
+msgid "Group members"
+msgstr ""
+
+msgid "Default group member"
+msgstr ""
+
+msgid "First member"
+msgstr ""
+
+msgid "Default must be a group member."
+msgstr ""
+
+msgid "Test interval (seconds)"
+msgstr ""
+
+msgid "Tolerance (milliseconds)"
+msgstr ""
+
+msgid "Idle timeout (seconds)"
+msgstr ""
+
+msgid "Interrupt existing connections on switch"
+msgstr ""
+
+msgid "Use an HTTPS URL."
+msgstr ""
+
+msgid "Use an absolute directory path."
+msgstr ""
+
+msgid "Optional for first login. Without a key, obtain the login URL from core logs or the Dashboard Tailscale tools. Existing state is reused."
+msgstr ""
+
+msgid "Name advertised to the tailnet. Empty uses the system hostname."
+msgstr ""
+
+msgid "Empty uses the official coordination server. Set an HTTPS URL for another compatible control server."
+msgstr ""
+
+msgid "Name or IP of the exit node. Without an exit node this endpoint provides tailnet access, not a general Internet proxy."
+msgstr ""
+
+msgid "Empty uses a private persistent directory per node under /etc/homeproxy/tailscale/. Keep it to preserve device identity across restarts."
+msgstr ""
+
+msgid "Empty uses a Taildrop subdirectory of this node’s state directory. Received files consume router storage; choose external storage for large files."
+msgstr ""
+
+msgid "Optional name for the system TUN interface. Avoid names already used by HomeProxy or other services."
+msgstr ""
+
+msgid "Register a temporary device rather than a permanent tailnet member."
+msgstr ""
+
+msgid "Accept subnet routes advertised by other tailnet devices."
+msgstr ""
+
+msgid "Allow locally accessible subnets to bypass the exit node. Availability also depends on advertised routes."
+msgstr ""
+
+msgid "Offer this device as an exit node. Approval and access policy are managed in the Tailscale administration console."
+msgstr ""
+
+msgid "Create an additional system TUN interface. This is separate from HomeProxy traffic interception and requires kmod-tun."
+msgstr ""
+
+msgid "Serve SSH on tailnet port 22 using local system accounts and Tailscale SSH access policies."
+msgstr ""
+
+msgid "Refuse terminal allocation for Tailscale SSH."
+msgstr ""
+
+msgid "Refuse SFTP over Tailscale SSH."
+msgstr ""
+
+msgid "Refuse TCP, Unix-socket and agent forwarding over Tailscale SSH."
+msgstr ""
+
+msgid "Empty or 0 selects an automatic peer-to-peer UDP port."
+msgstr ""
+
+msgid "Optional UDP port for peer relay connections. Leave empty to retain the default."
+msgstr ""
+
+msgid "Empty uses the Tailscale default MTU."
+msgstr ""
+
+msgid "Seconds. Empty uses 300 seconds."
+msgstr ""
+
+msgid "Select nodes and groups directly from the node library in routing rules. Existing routing-node overrides remain editable."
+msgstr ""
+
+msgid "Supports sing-box JSON nodes and groups, SIP008, and proxy share-link subscriptions. DNS and routing rules are not imported."
+msgstr ""
+
+msgid "No members"
+msgstr ""
+
+msgid "Missing node (%s)"
+msgstr ""
+
+msgid "Not in this group (%s)"
+msgstr ""
+
+msgid "Node / group details"
+msgstr ""
+
+msgid "%s members"
+msgstr ""
+
+msgid "Default: %s"
+msgstr ""
+
+msgid "Automatic latency selection"
+msgstr ""
+
+msgid "Exit node: %s"
+msgstr ""
+
+msgid "Tailnet access"
+msgstr ""
+
+msgid "Direct connection"
+msgstr ""
+
+msgid "Select existing nodes or groups. Nested groups are supported; self references and dependency cycles are not allowed."
+msgstr ""
+
+msgid "HTTP URL requested through each member to compare latency."
+msgstr ""
+
+msgid "Interval between automatic latency checks. Empty uses the core default."
+msgstr ""
+
+msgid "Latency difference tolerated before switching to a faster member. Empty uses the core default."
+msgstr ""
+
+msgid "Pause periodic checks after the group is idle. Empty uses the core default."
+msgstr ""
+
+msgid "When enabled, switching members interrupts existing connections as well as affecting new connections."
+msgstr ""
+
+msgid "Tools"
+msgstr ""
+
+msgid "Core default"
+msgstr ""
+
+msgid "Connection state"
+msgstr ""
+
+msgid "Connection sorting"
+msgstr ""
+
+msgid "Active"
+msgstr ""
+
+msgid "Closed"
+msgstr ""
+
+msgid "Newest first"
+msgstr ""
+
+msgid "Uploaded bytes"
+msgstr ""
+
+msgid "Downloaded bytes"
+msgstr ""
+
+msgid "Close all connections"
+msgstr ""
+
+msgid "This closes all connections in the selected core instance, including those hidden by filters."
+msgstr ""
+
+msgid "STUN / NAT test"
+msgstr ""
+
+msgid "Network quality"
+msgstr ""
+
+msgid "Server / URL"
+msgstr ""
+
+msgid "Start"
+msgstr ""
+
+msgid "External address"
+msgstr ""
+
+msgid "NAT mapping"
+msgstr ""
+
+msgid "NAT filtering"
+msgstr ""
+
+msgid "Server does not support NAT classification"
+msgstr ""
+
+msgid "Elapsed"
+msgstr ""
+
+msgid "Idle latency"
+msgstr ""
+
+msgid "Download capacity"
+msgstr ""
+
+msgid "Upload capacity"
+msgstr ""
+
+msgid "Download responsiveness"
+msgstr ""
+
+msgid "Upload responsiveness"
+msgstr ""
+
+msgid "Test ended without a final result."
+msgstr ""
+
+msgid "Completed"
+msgstr ""
+
+msgid "Waiting for Tailscale status…"
+msgstr ""
+
+msgid "No running Tailscale endpoints."
+msgstr ""
+
+msgid "Log in to Tailscale"
+msgstr ""
+
+msgid "Online"
+msgstr ""
+
+msgid "Offline"
+msgstr ""
+
+msgid "Relay"
+msgstr ""
+
+msgid "Probe UDP connectivity, external address and NAT behavior through the selected outbound. NAT classification requires server support."
+msgstr ""
+
+msgid "This test generates download and upload traffic for up to 20 seconds. Start it only when you want to measure capacity and responsiveness under load."
+msgstr ""
+
+msgid "Settings"
+msgstr ""
+
+msgid "Observability settings"
+msgstr ""
+
+msgid "Allow LAN Dashboard connections"
+msgstr ""
+
+msgid "Local monitoring uses an internal API automatically. Applying connection settings restarts HomeProxy."
+msgstr ""
+
+msgid "Off: only this router can access the core API. On: trusted browsers on your LAN can connect directly."
+msgstr ""
+
+msgid "LAN listen address"
+msgstr ""
+
+msgid "Leave empty to use the LAN IPv4 address. This does not open WAN firewall access."
+msgstr ""
+
+msgid "Allowed Dashboard origins"
+msgstr ""
+
+msgid "Enter trusted Dashboard origins, for example https://sing-box-dashboard.sagernet.org. Browser HTTPS and local-network permissions still apply."
+msgstr ""
+
+msgid "Connection secret"
+msgstr ""
+
+msgid "Advanced connection settings"
+msgstr ""
+
+msgid "Provide both TLS certificate and private key, or leave both empty."
+msgstr ""
+
+msgid "Excluded rule sets"
+msgstr ""
+
+msgid "Also require that none of these rule sets match. Combined with the other conditions using AND."
+msgstr ""
+
+msgid "Search groups or members"
+msgstr ""
+
+msgid "Expand all"
+msgstr ""
+
+msgid "Collapse all"
+msgstr ""
+
+msgid "No matching groups or members."
+msgstr ""
+
+msgid "Manual selection"
+msgstr ""
+
+msgid "Testing…"
+msgstr ""
+
+msgid "Switching…"
+msgstr ""
+
+msgid "Latency test requested. Results update automatically."
+msgstr ""
+
+msgid "Selection updated."
+msgstr ""
+
+msgid "Creation method"
+msgstr ""
+
+msgid "Configure directly"
+msgstr ""
+
+msgid "Reference an existing node"
+msgstr ""
+
+msgid "Base node"
+msgstr ""
+
+msgid "Inherited configuration"
+msgstr ""
+
+msgid "Inherit server, authentication, TLS and transport settings. Local overrides are kept separately."
+msgstr ""
+
+msgid "Protocol-specific fields follow the base node. Edit that node to change them; this entry only overrides how it is reached."
+msgstr ""
+
+msgid "Upstream outbound"
+msgstr ""
+
+msgid "Connect to this proxy through the selected outbound. An empty override inherits the original setting; direct connection clears an inherited upstream."
+msgstr ""
+
+msgid "Inherit original setting"
+msgstr ""
+
+msgid "Connect directly"
+msgstr ""
+
+msgid "Original upstream"
+msgstr ""
+
+msgid "Inherited from the base node"
+msgstr ""
+
+msgid "Override interface"
+msgstr ""
+
+msgid "Used for a direct connection to the proxy server. Leave empty to inherit. Dial fields such as interface binding are ignored when an upstream is set."
+msgstr ""
+
+msgid "Override server address resolver"
+msgstr ""
+
+msgid "Custom DNS servers are available only in custom routing mode. An unavailable resolver prevents applying the configuration."
+msgstr ""
+
+msgid "Use routing default"
+msgstr ""
+
+msgid "Override address strategy"
+msgstr ""
+
+msgid "Reference"
+msgstr ""
+
+msgid "Reference: %s"
+msgstr ""
+
+msgid "Via %s"
+msgstr ""
+
+msgid "Select a base node."
+msgstr ""
+
+msgid "Choose a proxy node as the base, not a group or endpoint."
+msgstr ""
+
+msgid "Circular node dependency: %s"
+msgstr ""
+
+msgid "Group must contain at least one member."
+msgstr ""
+
+#: client.js
+msgid "System uses the operating system network stack; mixed and gVisor require the corresponding core support."
+msgstr ""
+
+#: client.js
+msgid "Automatic"
+msgstr ""
+
+#: client.js
+msgid "Optimistic DNS cache"
+msgstr ""
+
+#: client.js
+msgid "Return expired cached answers while refreshing them in the background."
+msgstr ""
+
+#: client.js
+msgid "DNS query timeout (seconds)"
+msgstr ""
+
+#: client.js
+msgid "Persist DNS cache"
+msgstr ""
+
+#: client.js
+msgid "Store complete DNS responses until their TTL expires. Runtime storage is cleared on router reboot."
+msgstr ""
+
+#: client.js
+msgid "Match DNS response"
+msgstr ""
+
+#: client.js
+msgid "Evaluate a DNS response before matching IP filters or IP rule sets."
+msgstr ""
+
+#: client.js
+msgid "Evaluation DNS server"
+msgstr ""
+
+#: client.js
+msgid "UCI DNS server section or default-dns/system-dns. Defaults to this rule’s DNS server."
+msgstr ""
+
+#: client.js
+msgid "Return evaluated response"
+msgstr ""
+
+#: client.js
+msgid "Restrict DNS answers to one address family. Ordering preferences belong to the resolver settings."
+msgstr ""
+
+#: observe-settings.js
+msgid "Save & Apply"
+msgstr ""
+
+#: observability.js
+msgid "Tailscale"
+msgstr ""
+
+#: node.js
+msgid "Initial selection when the core starts. Runtime switching is available in Dashboard; the first member is used when unset."
+msgstr ""
+
+#: node.js
+msgid "Gecko"
+msgstr ""
+
+#: node.js
+msgid "Pinned certificate public key SHA256"
+msgstr ""
+
+#: observability.js
+msgid "All"
+msgstr ""
+
+#: observability.js
+msgid "Latency"
+msgstr ""
+
+#: observability.js
+msgid "Unknown"
+msgstr ""
+
+#: observability.js
+msgid "Ping"
+msgstr ""
+
+msgid "The core sends its buffered logs first, then live updates. This page keeps up to 3000 entries and displays up to 1000. Reconnecting replaces the view with the core buffer; file logs are separate."
+msgstr ""
+
+msgid "API TLS server name"
+msgstr ""
+
+msgid "Certificate DNS name used by the internal relay; connects to the configured listen address. Leave empty for an IP certificate."
+msgstr ""
+
+msgid "Another test is running."
+msgstr ""
+
+msgid "Display paused; log subscription is stopped."
+msgstr ""
+
+msgid "Only traffic entering this core is listed. Internal node latency tests are not proxy connections. All includes closed connections retained by the core or this page."
+msgstr ""
+
+msgid "No retained closed connections."
+msgstr ""
+
+msgid "No connections have been reported by this core. Send traffic through its proxy entry to verify."
+msgstr ""
+
+msgid "Read-only access"
+msgstr ""
+
+msgid "These nodes are still referenced. Update these settings before removing them:"
+msgstr ""
