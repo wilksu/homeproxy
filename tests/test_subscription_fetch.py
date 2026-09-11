@@ -25,8 +25,8 @@ class FetchTests(unittest.TestCase):
       observed.append(c.recv(4096));c.sendall(b'HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\nfixture')
     t=threading.Thread(target=server,daemon=True);t.start()
     url='http://subscription.test/feed' if proxy=='1' else f'http://127.0.0.1:{port}/feed'
-    script="import {executeCommand,shellQuote} from 'homeproxy';const uciconfig='homeproxy';const user_agent='fixture';const via_proxy="+json.dumps(proxy)+";const url="+json.dumps(url)+";const uci={get:()=>"+str(port)+"};"+body+"print(res);"
+    script="import {executeCommand,shellQuote} from 'homeproxy';const uciconfig='homeproxy';const user_agent='fixture';const via_proxy="+json.dumps(proxy)+";const url="+json.dumps(url)+";const uci={get:()=>"+str(port)+"};"+body+"print(res,'|',status);"
     p=subprocess.run([UCODE,'-L',str(ROOT/'tests/support/*.uc'),'-L',str(ROOT/'root/etc/homeproxy/scripts/*.uc'),'-e',script],capture_output=True,text=True,timeout=8)
-    t.join(timeout=5);self.assertEqual(p.returncode,0,p.stderr);self.assertEqual(p.stdout,'fixture')
+    t.join(timeout=5);self.assertEqual(p.returncode,0,p.stderr);self.assertEqual(p.stdout,'fixture|200')
     if proxy=='1':self.assertEqual(observed[1],'subscription.test')
     self.assertIn(b'GET /feed',observed[-1])

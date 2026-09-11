@@ -420,7 +420,31 @@ function parseShareLink(uri, features) {
 	return config;
 }
 
-function renderNodeSettings(section, data, features, main_node, routing_mode) {
+function buildNodeLabels(config) {
+	const subscriptions = (uci.get(config, 'subscription', 'subscription_url') || []).map(raw => {
+		const clean = raw.replace(/#.*$/, '');
+		let title = '';
+		try {
+			const url = new URL(raw);
+			title = url.hash ? decodeURIComponent(url.hash.slice(1)) : url.hostname;
+		} catch (e) { }
+		return { clean, hash: hp.calcStringMD5(clean), title };
+	});
+	const candidates = {}, counts = {};
+	uci.sections(config, 'node', n => {
+		let sourceURL = n.source_id ? uci.get(config, n.source_id, 'url') : '';
+		const source = subscriptions.find(s => sourceURL ? s.clean === sourceURL : n.grouphash === s.hash);
+		const value = (n.label || n['.name']) + (source?.title ? ' — ' + source.title : '');
+		candidates[n['.name']] = value;
+		counts[value] = (counts[value] || 0) + 1;
+	});
+	for (const id in candidates)
+		if (counts[candidates[id]] > 1)
+			candidates[id] += ' · ' + id.slice(-6);
+	return candidates;
+}
+
+function renderNodeSettings(section, data, features, main_node, routing_mode, nodeLabels) {
 	let s = section, o;
 	s.handleRemove = removeNode;
 	s.rowcolors = true;
@@ -459,8 +483,7 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 
 	const nodeName = id => {
 		const n=uci.get(data[0],id);if(!n)return _('Missing node (%s)').format(id || '—');
-		let origin='';try{if(n.source_id)origin=new URL(uci.get(data[0],n.source_id,'url')).hostname;}catch(e){}
-		return (n.label || id)+(origin?' — '+origin:'');
+		return nodeLabels[id] || n.label || id;
 	};
 	function nodeValidation(sid) {
 		const current=this.section;
@@ -632,9 +655,7 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 		if (!id) return _('No members');
 		const n=uci.get(data[0],id);
 		if(!n)return _('Missing node (%s)').format(id);
-		let origin='';
-		if(n.source_id){try {origin=new URL(uci.get(data[0],n.source_id,'url')).hostname;}catch(e){}}
-		return (n.label || id)+(origin?' — '+origin:'');
+		return nodeName(id);
 	};
 	const membersOption=s.option(form.DynamicList,'group_nodes',_('Group members'),
 		_('Select existing nodes or groups. Nested groups are supported; self references and dependency cycles are not allowed.'));
@@ -1466,6 +1487,7 @@ return view.extend({
 		let main_node = uci.get(data[0], 'config', 'main_node');
 		let routing_mode = uci.get(data[0], 'config', 'routing_mode');
 		let features = data[1];
+		let nodeLabels = buildNodeLabels(data[0]);
 
 		/* Cache subscription information, it will be called multiple times */
 		let subinfo = [];
@@ -1476,6 +1498,12 @@ return view.extend({
 			let sourceID;uci.sections(data[0],'subscription_source',s=>{if(s.url===suburl.replace(/#.*$/,''))sourceID=s['.name'];});
 			subinfo.push({ 'hash': urlhash, 'title': title, 'id':sourceID });
 		}
+		const subscriptionTitleCounts = {};
+		for (const info of subinfo)
+			subscriptionTitleCounts[info.title] = (subscriptionTitleCounts[info.title] || 0) + 1;
+		for (const info of subinfo)
+			if (subscriptionTitleCounts[info.title] > 1)
+				info.title += ' · ' + (info.id || info.hash).slice(-6);
 
 		m = new form.Map('homeproxy', _('Edit nodes'));
 
@@ -1485,7 +1513,7 @@ return view.extend({
 		/* User nodes start */
 		s.tab('node', _('Nodes'));
 		o = s.taboption('node', form.SectionValue, '_node', form.GridSection, 'node');
-		ss = renderNodeSettings(o.subsection, data, features, main_node, routing_mode);
+		ss = renderNodeSettings(o.subsection, data, features, main_node, routing_mode, nodeLabels);
 		ss.addremove = true;
 		ss.filter = function(section_id) {
 			for (let info of subinfo)
@@ -1587,9 +1615,22 @@ return view.extend({
 
 		/* Subscription nodes start */
 		for (const info of subinfo) {
-			s.tab('sub_' + info.hash, _('Sub (%s)').format(info.title));
-			o = s.taboption('sub_' + info.hash, form.SectionValue, '_sub_' + info.hash, form.GridSection, 'node');
-			ss = renderNodeSettings(o.subsection, data, features, main_node, routing_mode);
+			const tab = 'sub_' + info.hash;
+			s.tab(tab, _('Sub (%s)').format(info.title));
+			o = s.taboption(tab, form.Button, '_update_' + info.hash, _('Update nodes from subscriptions'));
+			o.inputstyle = 'apply';
+			o.inputtitle = function() {
+				if (this.map.readonly) { this.readonly = true; return _('Read-only access'); }
+				return _('Update this subscription');
+			};
+			o.onclick = function() {
+				if (this.map.readonly) return;
+				return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions.uc', [info.id || 'src_' + info.hash]).then(() => location.reload()).catch(err => {
+					ui.addNotification(null, E('p', _('An error occurred during updating subscriptions: %s').format(err)));
+				});
+			};
+			o = s.taboption(tab, form.SectionValue, '_sub_' + info.hash, form.GridSection, 'node');
+			ss = renderNodeSettings(o.subsection, data, features, main_node, routing_mode, nodeLabels);
 			ss.filter = function(section_id) {
 				return ((uci.get(data[0], section_id, 'grouphash') === info.hash || info.id && uci.get(data[0],section_id,'source_id') === info.id));
 			}
@@ -1673,9 +1714,7 @@ return view.extend({
 		o.inputstyle = 'apply';
 		o.inputtitle = _('Save current settings');
 		o.onclick = function() {
-			return this.map.save(null, true).then(() => {
-				ui.changes.apply(true);
-			});
+			return this.map.save(null, true).then(() => ui.changes.apply(true)).then(() => location.reload());
 		}
 
 		o = s.taboption('subscription', form.Button, '_update_subscriptions', _('Update nodes from subscriptions'));

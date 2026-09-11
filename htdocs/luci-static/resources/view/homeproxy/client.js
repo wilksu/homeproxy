@@ -107,6 +107,13 @@ return view.extend({
 			}
 
 		});
+		/* Keep common labels readable, but make truly identical choices unique. */
+		const proxy_label_counts = {};
+		for (const id in proxy_nodes)
+			proxy_label_counts[proxy_nodes[id]] = (proxy_label_counts[proxy_nodes[id]] || 0) + 1;
+		for (const id in proxy_nodes)
+			if (proxy_label_counts[proxy_nodes[id]] > 1)
+				proxy_nodes[id] += ' · ' + id.slice(-6);
 
 		m = new form.Map('homeproxy', _('HomeProxy'),
 			_('The modern ImmortalWrt proxy platform for ARM64/AMD64.'));

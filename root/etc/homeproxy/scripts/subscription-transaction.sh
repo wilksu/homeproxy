@@ -22,7 +22,7 @@ replace_config() {
 finish() {
  result=$?
  trap - EXIT HUP INT TERM
- unset HP_UCI_CONF_DIR HP_UCI_SAVE_DIR HP_OUTPUT_DIR HP_SUBSCRIPTION_STAGED
+ unset HP_UCI_CONF_DIR HP_UCI_SAVE_DIR HP_OUTPUT_DIR HP_SUBSCRIPTION_STAGED HP_SUBSCRIPTION_SOURCE
  if [ "$committed" = 1 ]; then
   if cmp -s /etc/config/homeproxy "$work/config/homeproxy" && [ -z "$(uci changes homeproxy)" ]; then
    if ! replace_config "$work/original"; then keep_recovery=1; result=1; fi
@@ -52,6 +52,7 @@ state=$(ucode -e 'import {connect} from "ubus"; const services=connect().call("s
 case "$state" in '0 0'|'0 1'|'1 0'|'1 1') ;; *) echo 'Unable to determine service state' >&2; exit 1;; esac
 client_was_running=${state% *}; server_was_running=${state#* }
 export HP_UCI_CONF_DIR="$work/config" HP_UCI_SAVE_DIR="$work/save" HP_OUTPUT_DIR="$work/output" HP_SUBSCRIPTION_STAGED=1
+export HP_SUBSCRIPTION_SOURCE="${1-}"
 uci -c "$HP_UCI_CONF_DIR" -P "$HP_UCI_SAVE_DIR" export homeproxy > "$work/original.export"
 via_proxy=$(uci -c "$HP_UCI_CONF_DIR" -q get homeproxy.subscription.update_via_proxy || true)
 if [ "$via_proxy" != 1 ] && [ "$client_was_running" = 1 ]; then
@@ -64,7 +65,7 @@ if cmp -s "$work/original.export" "$work/candidate.export"; then
  echo 'Subscription configuration unchanged'
  # Resource lists feed DNS/firewall generation even when the nodes are unchanged.
  if [ "${HP_RESOURCES_CHANGED:-0}" = 1 ] && [ "$client_was_running" = 1 ]; then
-  unset HP_UCI_CONF_DIR HP_UCI_SAVE_DIR HP_OUTPUT_DIR HP_SUBSCRIPTION_STAGED
+  unset HP_UCI_CONF_DIR HP_UCI_SAVE_DIR HP_OUTPUT_DIR HP_SUBSCRIPTION_STAGED HP_SUBSCRIPTION_SOURCE
   activating=1
   HP_START_CLIENT="$client_was_running" HP_START_SERVER="$server_was_running" /etc/init.d/homeproxy restart
   activating=0 stopped=0
@@ -88,7 +89,7 @@ cmp -s /etc/config/homeproxy "$work/original" && [ -z "$(uci changes homeproxy)"
 committed=1
 mv "$install_file" /etc/config/homeproxy
 install_file=''
-unset HP_UCI_CONF_DIR HP_UCI_SAVE_DIR HP_OUTPUT_DIR HP_SUBSCRIPTION_STAGED
+unset HP_UCI_CONF_DIR HP_UCI_SAVE_DIR HP_OUTPUT_DIR HP_SUBSCRIPTION_STAGED HP_SUBSCRIPTION_SOURCE
 # Updating a stopped service must not start it, including fully disabled setups.
 if [ "$client_was_running" = 1 ]; then
  activating=1

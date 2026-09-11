@@ -9,6 +9,14 @@ const getSecret = rpc.declare({ object: 'luci.homeproxy', method: 'api_secret', 
 return baseclass.extend({
  async open() {
   await uci.load('homeproxy');
+  const created = !uci.get('homeproxy', 'observability');
+  if (created) {
+   uci.add('homeproxy', 'homeproxy', 'observability');
+   uci.set('homeproxy', 'observability', 'enabled', '1');
+   uci.set('homeproxy', 'observability', 'external', '0');
+   uci.set('homeproxy', 'observability', 'client_port', '5334');
+   uci.set('homeproxy', 'observability', 'server_port', '5335');
+  }
   const m = new form.Map('homeproxy', null, _('Local monitoring uses an internal API automatically. Applying connection settings restarts HomeProxy.'));
   const s = m.section(form.NamedSection, 'observability', 'homeproxy');
   let o = s.option(form.Flag, 'external', _('Allow LAN Dashboard connections'), _('Off: only this router can access the core API. On: trusted browsers on your LAN can connect directly.'));
@@ -47,7 +55,7 @@ return baseclass.extend({
   o.datatype = 'hostname'; o.retain = true; o.depends({ external: '1', _advanced: '1' });
   const content = await m.render();
   ui.showModal(_('Observability settings'), [content, E('div', { class: 'right' }, [
-   E('button', { class: 'btn', click: () => ui.hideModal() }, _('Cancel')), ' ',
+   E('button', { class: 'btn', click: () => { if (created) uci.remove('homeproxy', 'observability'); ui.hideModal(); } }, _('Cancel')), ' ',
    E('button', { class: 'btn cbi-button-positive', click: ui.createHandlerFn(this, async () => {
     await m.save();
     uci.set('homeproxy','observability','enabled','1');

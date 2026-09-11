@@ -5,6 +5,7 @@ import { mkdir,writefile,chmod,unlink } from 'fs';
 const scalar={server:'address',server_port:'port',username:'username',password:'password',uuid:'uuid',method:'shadowsocks_encrypt_method',plugin:'shadowsocks_plugin',plugin_opts:'shadowsocks_plugin_opts',server_ports:'hysteria_hopping_port',up_mbps:'hysteria_up_mbps',down_mbps:'hysteria_down_mbps',bbr_profile:'hysteria_bbr_profile',disable_chrome_parrot:'hysteria_disable_chrome_parrot',recv_window_conn:'hysteria_recv_window_conn',recv_window:'hysteria_revc_window',disable_mtu_discovery:'hysteria_disable_mtu_discovery',client_version:'ssh_client_version',host_key:'ssh_host_key',host_key_algorithms:'ssh_host_key_algo',private_key:'ssh_priv_key',private_key_passphrase:'ssh_priv_key_pp',user:'username',congestion_control:'tuic_congestion_control',udp_relay_mode:'tuic_udp_relay_mode',udp_over_stream:'tuic_udp_over_stream',zero_rtt_handshake:'tuic_enable_zero_rtt',flow:'vless_flow',alter_id:'vmess_alterid',security:'vmess_encrypt',global_padding:'vmess_global_padding',authenticated_length:'vmess_authenticated_length',packet_encoding:'packet_encoding',tcp_fast_open:'tcp_fast_open',tcp_multi_path:'tcp_multi_path',udp_fragment:'udp_fragment',proxy_protocol:'proxy_protocol'};
 const times={idle_session_check_interval:'anytls_idle_session_check_interval',idle_session_timeout:'anytls_idle_session_timeout',hop_interval:'hysteria_hop_interval',hop_interval_max:'hysteria_hop_interval_max',heartbeat:'tuic_heartbeat'};
 const tls={enabled:'tls',server_name:'tls_sni',insecure:'tls_insecure',alpn:'tls_alpn',min_version:'tls_min_version',max_version:'tls_max_version',cipher_suites:'tls_cipher_suites',certificate_path:'tls_cert_path',certificate_public_key_sha256:'tls_certificate_public_key_sha256'};
+const supported=['anytls','http','hysteria','hysteria2','shadowsocks','shadowtls','socks','ssh','trojan','tuic','vless','vmess','direct','selector','urltest'];
 function value(v) { if(type(v)==='bool')return v?'1':'0'; if(type(v)==='array')return map(v,x=>''+x); return ''+v; }
 function seconds(v) {
  if(type(v)==='int' || type(v)==='double')return ''+v;
@@ -18,7 +19,6 @@ export function nodeID(source, key) { return 'n'+md5(source+'\n'+key); };
 export function importNode(input, resolve) {
  if (input.type === 'tailscale') die('Tailscale endpoints must be configured locally; subscriptions cannot manage router services');
  const n={type:input.type,label:input.tag,source_tag:input.tag};
- const supported=['anytls','http','hysteria','hysteria2','shadowsocks','shadowtls','socks','ssh','trojan','tuic','vless','vmess','direct','selector','urltest'];
  if(!(input.type in supported))die('Unsupported node type: '+input.type);
  for(let key in keys(input)) {
   const v=input[key];if(key in ['type','tag'])continue;
@@ -70,8 +70,14 @@ export function importNode(input, resolve) {
  return n;
 };
 export function importNodes(config, source) {
- const inputs=[...(config.outbounds || []),...(config.endpoints || [])], tags={};
- for(let input in inputs){if(!input.tag || tags[input.tag])die('Missing or duplicate outbound/endpoint tag');tags[input.tag]=nodeID(source,input.tag);}
+ const all=[...(config.outbounds || []),...(config.endpoints || [])], tags={}, seen={};
+ for(let input in all){
+  if(!input.tag || !input.type || seen[input.tag])die('Missing type/tag or duplicate outbound/endpoint tag');
+  seen[input.tag]=true;
+  tags[input.tag]=input.type in supported ? nodeID(source,input.tag) : null;
+  if(input.type==='tailscale')die('Tailscale endpoints must be configured locally; subscriptions cannot manage router services');
+ }
+ const inputs=filter(all,input=>input.type in supported);
  const resolve=t=>{if(!tags[t])die('Missing group member or detour: '+t);return tags[t];};
  const nodes=map(inputs,input=>{const n=importNode(input,resolve);n.node_id=tags[input.tag];return n;});
  const byid={};for(let n in nodes)byid[n.node_id]=n;
@@ -79,9 +85,12 @@ export function importNodes(config, source) {
  function visit(id){if(visiting[id])die('Circular group/detour dependency');if(done[id])return;visiting[id]=true;const n=byid[id];for(let dep in [...(n.group_nodes || []),...(n.node_detour?[n.node_detour]:[])])visit(dep);delete visiting[id];done[id]=true;}
  for(let n in nodes){if(n.group_default && !(n.group_default in (n.group_nodes || [])))die('Default must be a group member');visit(n.node_id);}
  // Check the supported native objects with the paired installed core before storage.
- mkdir('/var/run/homeproxy/node-import',0700);
- const file='/var/run/homeproxy/node-import/'+md5(source)+'.json';
- writefile(file,sprintf('%J',{outbounds:config.outbounds || [],endpoints:config.endpoints || [],dns:{servers:[{type:'local',tag:'hp-import-resolver'}]},route:{default_domain_resolver:'hp-import-resolver'}}));chmod(file,0600);
+ const directory=(getenv('HP_OUTPUT_DIR') || '/var/run/homeproxy')+'/node-import';
+ mkdir(directory,0700);
+ const file=directory+'/'+md5(source)+'.json';
+ const outbounds=filter(config.outbounds || [],input=>input.type in supported);
+ const endpoints=filter(config.endpoints || [],input=>input.type in supported);
+ writefile(file,sprintf('%J',{outbounds,endpoints,dns:{servers:[{type:'local',tag:'hp-import-resolver'}]},route:{default_domain_resolver:'hp-import-resolver'}}));chmod(file,0600);
  const result=system('sing-box check -c '+file+' >/dev/null 2>&1');unlink(file);
  if(result)die('Native nodes failed core validation; check protocol options and core capabilities');
  return nodes;

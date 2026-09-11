@@ -369,8 +369,9 @@ service_stopped() {
 	config_get tun_name "infra" "tun_name" "singtun0"
 
 	# TUN
-	ip link set "$tun_name" down 2>"/dev/null"
-	ip tuntap del mode tun name "$tun_name" 2>"/dev/null"
+	ip link set "$tun_name" down 2>"/dev/null" || true
+	ip tuntap del mode tun name "$tun_name" 2>"/dev/null" || true
+	return 0
 }
 
 reload_service() {
