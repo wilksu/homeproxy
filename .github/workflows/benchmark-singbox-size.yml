@@ -1,0 +1,186 @@
+name: Benchmark sing-box binary size
+
+on:
+  workflow_dispatch:
+    inputs:
+      arm64_a53:
+        description: 'ARM64 v8.0 (Cortex-A53 compatible)'
+        type: boolean
+        default: true
+      armv7:
+        description: '32-bit ARMv7 (GOARM=7)'
+        type: boolean
+        default: false
+      mips_softfloat:
+        description: 'Big-endian MIPS soft-float'
+        type: boolean
+        default: false
+      mipsle_softfloat:
+        description: 'Little-endian MIPS soft-float'
+        type: boolean
+        default: false
+      amd64:
+        description: 'AMD64 v1 baseline'
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - '.github/workflows/benchmark-singbox-size.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  select-architectures:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - id: select
+        name: Build architecture matrix
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ARM64_A53: ${{ inputs.arm64_a53 }}
+          ARMV7: ${{ inputs.armv7 }}
+          MIPS_SOFTFLOAT: ${{ inputs.mips_softfloat }}
+          MIPSLE_SOFTFLOAT: ${{ inputs.mipsle_softfloat }}
+          AMD64: ${{ inputs.amd64 }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != workflow_dispatch ]]; then ARM64_A53=true; fi
+          selected=()
+          [[ "$ARM64_A53" == true ]] && selected+=('{"id":"arm64-v8.0-a53","goarch":"arm64","tuning":"GOARM64=v8.0"}')
+          [[ "$ARMV7" == true ]] && selected+=('{"id":"armv7","goarch":"arm","tuning":"GOARM=7"}')
+          [[ "$MIPS_SOFTFLOAT" == true ]] && selected+=('{"id":"mips-softfloat","goarch":"mips","tuning":"GOMIPS=softfloat"}')
+          [[ "$MIPSLE_SOFTFLOAT" == true ]] && selected+=('{"id":"mipsle-softfloat","goarch":"mipsle","tuning":"GOMIPS=softfloat"}')
+          [[ "$AMD64" == true ]] && selected+=('{"id":"amd64-v1","goarch":"amd64","tuning":"GOAMD64=v1"}')
+          ((${#selected[@]})) || { echo 'Select at least one architecture.' >&2; exit 1; }
+          matrix=$(IFS=,; printf '{"include":[%s]}' "${selected[*]}")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | jq .
+
+  benchmark:
+    needs: select-architectures
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select-architectures.outputs.matrix) }}
+    steps:
+      - name: Checkout HomeProxy pairing metadata
+        uses: actions/checkout@v6
+
+      - id: pairing
+        name: Resolve pinned sing-box version
+        run: |
+          version=$(python3 scripts/pairing.py | sed -n 's/^HP_CORE_VERSION:=//p')
+          [[ -n "$version" ]] || { echo 'Unable to resolve HP_CORE_VERSION.' >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned sing-box source
+        uses: actions/checkout@v6
+        with:
+          repository: SagerNet/sing-box
+          ref: v${{ steps.pairing.outputs.version }}
+          path: sing-box
+          fetch-depth: 1
+
+      - name: Set up pinned Go toolchain
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: sing-box/go.mod
+          cache-dependency-path: sing-box/go.sum
+
+      - name: Build seven feature variants
+        env:
+          TARGET_ID: ${{ matrix.id }}
+          GOARCH: ${{ matrix.goarch }}
+          TUNING: ${{ matrix.tuning }}
+          VERSION: ${{ steps.pairing.outputs.version }}
+        working-directory: sing-box
+        run: |
+          set -euo pipefail
+          export GOOS=linux CGO_ENABLED=0 GOTOOLCHAIN=local
+          case "$TUNING" in
+            GOARM64=*) export GOARM64="${TUNING#*=}" ;;
+            GOARM=*) export GOARM="${TUNING#*=}" ;;
+            GOMIPS=*) export GOMIPS="${TUNING#*=}" ;;
+            GOAMD64=*) export GOAMD64="${TUNING#*=}" ;;
+            *) echo "Unsupported tuning: $TUNING" >&2; exit 1 ;;
+          esac
+
+          fixed_tags='badlinkname,tfogo_checklinkname0,with_low_memory'
+          variants=(
+            'baseline|with_clash_api,with_gvisor,with_quic,with_utls,with_wireguard'
+            'no-gvisor|with_clash_api,with_quic,with_utls,with_wireguard'
+            'no-wireguard|with_clash_api,with_gvisor,with_quic,with_utls'
+            'no-quic|with_clash_api,with_gvisor,with_utls,with_wireguard'
+            'no-clash-api|with_gvisor,with_quic,with_utls,with_wireguard'
+            'minimal-utls|with_utls'
+            'absolute-minimal|'
+          )
+          output="$GITHUB_WORKSPACE/results/$TARGET_ID"
+          mkdir -p "$output/bin" "$output/build-info"
+          printf 'variant,tags,bytes,gzip_bytes,sha256\n' > "$output/sizes.csv"
+          shared_ldflags=$(cat release/LDFLAGS)
+          commit=$(git rev-parse HEAD)
+
+          for spec in "${variants[@]}"; do
+            name=${spec%%|*}
+            features=${spec#*|}
+            tags=$fixed_tags
+            [[ -z "$features" ]] || tags="$tags,$features"
+            binary="$output/bin/sing-box-$VERSION-$TARGET_ID-$name"
+            echo "Building $TARGET_ID / $name: $tags"
+            go build -trimpath \
+              -tags "$tags" \
+              -ldflags "-X github.com/sagernet/sing-box/constant.Version=$VERSION $shared_ldflags -s -w -buildid=" \
+              -o "$binary" ./cmd/sing-box
+            file "$binary" | tee "$output/build-info/$name.file.txt"
+            go version -m "$binary" > "$output/build-info/$name.go-version.txt"
+            bytes=$(stat -c '%s' "$binary")
+            gzip -9 -c "$binary" > "$binary.gz"
+            gzip_bytes=$(stat -c '%s' "$binary.gz")
+            sha=$(sha256sum "$binary" | cut -d' ' -f1)
+            printf '%s,"%s",%s,%s,%s\n' "$name" "$tags" "$bytes" "$gzip_bytes" "$sha" >> "$output/sizes.csv"
+          done
+
+          printf '%s\n' \
+            "sing-box=v$VERSION" \
+            "commit=$commit" \
+            "go=$(go version)" \
+            "target=$TARGET_ID" \
+            "GOOS=$GOOS" \
+            "GOARCH=$GOARCH" \
+            "$TUNING" > "$output/build.txt"
+
+      - name: Generate size report
+        env:
+          TARGET_ID: ${{ matrix.id }}
+        run: |
+          python3 - <<'PY'
+          import csv, os, pathlib
+          root=pathlib.Path('results')/os.environ['TARGET_ID']
+          rows=list(csv.DictReader((root/'sizes.csv').open()))
+          baseline=int(rows[0]['bytes'])
+          lines=[f"## sing-box size: `{os.environ['TARGET_ID']}`",'',
+                 '| Variant | ELF bytes | ELF MiB | gzip bytes | Saved vs baseline | Saved |',
+                 '|---|---:|---:|---:|---:|---:|']
+          for row in rows:
+              size=int(row['bytes']); saved=baseline-size
+              lines.append(f"| `{row['variant']}` | {size:,} | {size/1048576:.2f} | {int(row['gzip_bytes']):,} | {saved:,} | {saved/baseline:.1%} |")
+          lines += ['', 'All variants include `with_low_memory`, `badlinkname`, and `tfogo_checklinkname0`.',
+                    'The gzip column is only a reproducible compression proxy; it is not an APK/IPK or SquashFS measurement.']
+          report='\n'.join(lines)+'\n'
+          (root/'sizes.md').write_text(report)
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary: summary.write(report)
+          print(report)
+          PY
+
+      - name: Upload binaries and measurements
+        uses: actions/upload-artifact@v7
+        with:
+          name: sing-box-${{ steps.pairing.outputs.version }}-${{ matrix.id }}-size-benchmark
+          path: results/${{ matrix.id }}/
+          retention-days: 7
+          if-no-files-found: error
