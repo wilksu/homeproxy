@@ -2757,6 +2757,9 @@ msgstr ""
 msgid "Update nodes from subscriptions"
 msgstr ""
 
+msgid "Update this subscription"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/homeproxy/node.js:1346
 msgid "Update subscriptions via proxy."
 msgstr ""

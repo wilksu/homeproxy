@@ -4,11 +4,11 @@
 
 节点设置新增 Tailscale、Selector 和 URLTest 类型。Tailscale 按 Endpoint 写入，支持 1.14.0 文档的认证、控制服务器、主机名、路由接受／通告、退出节点、系统接口、端口、SSH 开关及细分权限、Taildrop 目录。状态按节点持久保存；默认 Taildrop 子目录位于该状态目录。核心没有 with_tailscale 时不展示类型，验证器也会检查构建能力。不包含 1.15.0 的 on_demand。
 
-原生 JSON 订阅提取支持的代理 outbounds，转换为现有 UCI 表单字段；具有本机管理能力的 Tailscale endpoint 禁止导入。不提供“原文 JSON 透传”后备路径。规则集、DNS 策略和路由规则不导入。Selector/URLTest 成员、默认选择及 detour 引用转为稳定节点 ID，并检查缺失和环。源对象还通过当前核心 check。不能映射的字段会拒绝该订阅更新并保留原节点，不能把这一版描述为所有 1.14 字段均已完成覆盖。
+原生 JSON 订阅提取支持的代理 outbounds，转换为现有 UCI 表单字段；具有本机管理能力的 Tailscale endpoint 禁止导入。不提供“原文 JSON 透传”后备路径。规则集、DNS 策略和路由规则不导入。独立且未被引用的不支持 outbound（包括旧 block、DNS outbound）会被跳过；Selector/URLTest 成员、默认选择及 detour 引用如果指向被跳过对象，整份来源更新会被拒绝。保留对象的引用转为稳定节点 ID，并检查缺失和环，再通过当前核心 check。支持类型中不能映射的字段仍会拒绝该订阅更新并保留原节点，不能把这一版描述为所有 1.14 字段均已完成覆盖。
 
 当前导入类型包括：Direct、AnyTLS、HTTP、Hysteria/2、Shadowsocks、ShadowTLS、SOCKS、SSH、Trojan、TUIC、VLESS、VMess、Selector、URLTest。现有手动 WireGuard 支持仍在，原生 WireGuard Endpoint 导入（包括多 Peer）尚未实现，需要完整建模。出站内的独立 domain_resolver 引用因为依赖未导入的 DNS 对象，会明确拒绝；需要后续设计本地解析器映射。部分 TLS 字段、非 Host 传输头、亚秒时间等超出现有表单模型的字段也会明确报错。以上为字段覆盖缺口，不是 sing-box 不支持。
 
-节点身份：原生对象使用 source ID + tag；显示名不再作为全局 ID。源 ID 保存在 subscription_source 元数据中，单条订阅 URL 替换会保持原 source ID；同时批量替换多个 URL 不猜测对应关系。不迁移旧标签 ID；使用全新配置重新订阅。手动分享链接导入使用新 UCI ID；同源分享链接同名时按内容区分。订阅更新不再先停止服务，有变化的节点订阅更新在完成后重启核心。
+节点身份：原生对象使用 source ID + tag；显示名不再作为全局 ID。源 ID 保存在 subscription_source 元数据中，单条订阅 URL 替换会保持原 source ID；同时批量替换多个 URL 不猜测对应关系。不迁移旧标签 ID；使用全新配置重新订阅。手动分享链接导入使用新 UCI ID；同源分享链接同名时按内容区分。每个来源可单独更新；下载、解析和候选校验期间保持现有服务运行，只有实际配置变化时才重启核心。来源中消失的节点如果仍被本地节点或策略引用，则拒绝该来源更新并保留上一版。
 
 自定义路由可直接从节点库选择出站／组，加载所需成员和 detour 依赖；旧路由节点兼容生成代码仍保留，但编辑标签已移除。节点来源与地址帮助区分同名项。
 

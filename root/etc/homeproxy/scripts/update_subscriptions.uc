@@ -21,7 +21,9 @@ import {
 } from 'homeproxy';
 
 /* UCI config start */
-if (!getenv('HP_SUBSCRIPTION_STAGED')) exit(system(['/bin/sh', '/etc/homeproxy/scripts/subscription-transaction.sh']));
+const requested_arg = length(ARGV || []) ? ARGV[0] : null;
+if (!getenv('HP_SUBSCRIPTION_STAGED'))
+	exit(system(['/bin/sh', '/etc/homeproxy/scripts/subscription-transaction.sh', ...(requested_arg ? [requested_arg] : [])]));
 const uci = cursor(getenv('HP_UCI_CONF_DIR'), getenv('HP_UCI_SAVE_DIR'));
 
 const uciconfig = 'homeproxy';
@@ -35,9 +37,16 @@ const allow_insecure = uci.get(uciconfig, ucisubscription, 'allow_insecure') || 
       filter_mode = uci.get(uciconfig, ucisubscription, 'filter_nodes') || 'disabled',
       filter_keywords = uci.get(uciconfig, ucisubscription, 'filter_keywords') || [],
       packet_encoding = uci.get(uciconfig, ucisubscription, 'packet_encoding') || 'xudp',
-      subscription_urls = uci.get(uciconfig, ucisubscription, 'subscription_url') || [],
+      configured_subscription_urls = uci.get(uciconfig, ucisubscription, 'subscription_url') || [],
       user_agent = uci.get(uciconfig, ucisubscription, 'user_agent'),
       via_proxy = uci.get(uciconfig, ucisubscription, 'update_via_proxy') || '0';
+const requested_source = getenv('HP_SUBSCRIPTION_SOURCE');
+const subscription_urls = requested_source ? filter(configured_subscription_urls, candidate => {
+	const clean = replace(candidate, /#.*$/, '');
+	let id;
+	uci.foreach(uciconfig, 'subscription_source', source => { if (source.url === clean) id = source['.name']; });
+	return (id || 'src_' + md5(clean)) === requested_source;
+}) : configured_subscription_urls;
 
 const routing_mode = uci.get(uciconfig, ucimain, 'routing_mode') || 'bypass_mainland_china';
 let main_node, main_udp_node;
@@ -79,6 +88,34 @@ function log(...args) {
 	const logfile = open(`${RUN_DIR}/homeproxy.log`, 'a');
 	logfile.write(`${getTime()} [SUBSCRIBE] ${join(' ', args)}\n`);
 	logfile.close();
+}
+
+if (requested_source && isEmpty(subscription_urls)) {
+	log(sprintf('Requested subscription source %s was not found.', requested_source));
+	exit(1);
+}
+
+function externalReferences(ids, sourceID, groupHash) {
+	const removing = {};
+	for (let id in ids) removing[id] = true;
+	const fields = {
+		homeproxy: ['main_node','main_udp_node','main_urltest_nodes','main_udp_urltest_nodes','default_outbound'],
+		node: ['group_nodes','group_default','node_detour','local_detour','node_base'],
+		routing_node: ['node','outbound','urltest_nodes'],
+		routing_rule: ['outbound'], dns_server: ['outbound'], dns_rule: ['outbound'], ruleset: ['outbound']
+	};
+	const references = [];
+	for (let sectionType in keys(fields)) uci.foreach(uciconfig, sectionType, cfg => {
+		if (removing[cfg['.name']]) return;
+		const sameSource = cfg['.type'] === 'node' && (cfg.source_id === sourceID || (!cfg.source_id && cfg.grouphash === groupHash));
+		const checkedFields = sameSource ? ['local_detour'] : fields[sectionType];
+		for (let field in checkedFields) {
+			const value = cfg[field];
+			for (let id in type(value) === 'array' ? value : [value])
+				if (removing[id]) push(references, sprintf('%s.%s -> %s', cfg.label || cfg['.name'], field, id));
+		}
+	});
+	return references;
 }
 
 function service_action(action) {
@@ -492,10 +529,12 @@ function main() {
 		node_cache[sourceID] = node_cache[groupHash];
 
 		const proxyArgs = via_proxy === '1' ? ['--noproxy', '', '--socks5-hostname', '127.0.0.1:' + (uci.get(uciconfig, 'infra', 'mixed_port') || '5330')] : ['--noproxy', '*'];
-		const fetched = executeCommand(join(' ', map(['/usr/bin/curl', '--fail', '--silent', '--show-error', '--location', '--proto', '=http,https', '--proto-redir', '=http,https', '--max-time', '30', '--user-agent', user_agent || 'HomeProxy', ...proxyArgs, url], shellQuote)));
-		const res = fetched.exitcode === 0 ? trim(fetched.stdout || '') : null;
+		const fetched = executeCommand(join(' ', map(['/usr/bin/curl', '--fail', '--silent', '--show-error', '--location', '--proto', '=http,https', '--proto-redir', '=http,https', '--max-time', '30', '--write-out', '\n%{http_code}', '--user-agent', user_agent || 'HomeProxy', ...proxyArgs, url], shellQuote)));
+		const status = match(fetched.stdout || '', /\n([0-9]{3})$/)?.[1] || '000';
+		const res = fetched.exitcode === 0 ? trim(replace(fetched.stdout || '', /\n[0-9]{3}$/, '')) : null;
 		if (isEmpty(res)) {
-			log(sprintf('Failed to fetch subscription %s.', sourceID));
+			const detail = replace(trim(fetched.stderr || ''), /https?:\/\/[^ ]+/g, '<subscription-url>');
+			log(sprintf('Failed to fetch subscription %s: curl exit %d, HTTP %s%s.', sourceID, fetched.exitcode, status, detail ? ', ' + detail : ''));
 			continue;
 		}
 
@@ -526,6 +565,17 @@ function main() {
 		let broken=false;
 		for(let n in accepted)for(let ref in [...(n.group_nodes || []),...(n.node_detour?[n.node_detour]:[])])if(!node_cache[groupHash][ref])broken=true;
 		if(broken){node_cache[groupHash]={};node_cache[sourceID]=node_cache[groupHash];log('Subscription '+sourceID+' rejected: filtering removed a referenced node');continue;}
+		const fresh={};for(let n in accepted)fresh[n.node_id]=true;
+		const removing=[];
+		uci.foreach(uciconfig, ucinode, cfg=>{
+			if((cfg.source_id===sourceID || (!cfg.source_id && cfg.grouphash===groupHash)) && !fresh[cfg['.name']])push(removing,cfg['.name']);
+		});
+		const references=externalReferences(removing,sourceID,groupHash);
+		if(length(references)){
+			node_cache[groupHash]={};node_cache[sourceID]=node_cache[groupHash];
+			log(sprintf('Subscription %s rejected: removed nodes are still referenced: %s',sourceID,join('; ',references)));
+			continue;
+		}
 		node_cache[sourceID]=node_cache[groupHash];
 		push(node_result,accepted);
 		log(sprintf('Subscription %s: parsed %d node/group objects',sourceID,length(accepted)));
@@ -546,7 +596,7 @@ function main() {
 			return null;
 
 		/* Empty object - failed to fetch nodes */
-		if (length(node_cache[cfg.source_id || cfg.grouphash]) === 0)
+		if (!node_cache[cfg.source_id || cfg.grouphash] || length(node_cache[cfg.source_id || cfg.grouphash]) === 0)
 			return null;
 
 		if (!node_cache[cfg.source_id || cfg.grouphash] || !node_cache[cfg.source_id || cfg.grouphash][cfg['.name']]) {

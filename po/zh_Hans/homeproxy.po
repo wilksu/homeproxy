@@ -2826,6 +2826,9 @@ msgstr "规则集更新间隔。"
 msgid "Update nodes from subscriptions"
 msgstr "从订阅更新节点"
 
+msgid "Update this subscription"
+msgstr "更新此订阅"
+
 #: htdocs/luci-static/resources/view/homeproxy/node.js:1346
 msgid "Update subscriptions via proxy."
 msgstr "使用代理更新订阅。"

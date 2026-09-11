@@ -32,6 +32,12 @@ esac
 case "$*" in
  *"-e "*) echo "$SERVICE_STATE";;
  *update_subscriptions.uc*)
+  if [ "${SERVICE_STATE% *}" = 1 ] && [ "$VIA_PROXY" != 1 ]; then
+   [ "$(cat "$ACTIONS")" = "stop::" ] || exit 1
+  else
+   [ ! -s "$ACTIONS" ] || exit 1
+  fi
+  [ "${HP_SUBSCRIPTION_SOURCE:-}" = "$EXPECTED_SOURCE" ] || exit 1
   [ "$SCENARIO" != fetch-failed ] || exit 1
   [ "$SCENARIO" != noop ] || exit 0
   echo candidate > "$HP_UCI_CONF_DIR/homeproxy"
@@ -40,7 +46,8 @@ case "$*" in
  *validate.uc*) [ "$SCENARIO" != invalid ];;
 esac
 ''');(p/'bin/ucode').chmod(0o755)
-      r=subprocess.run(['sh',str(p/'transaction')],env={**os.environ,'PATH':str(p/'bin')+':'+os.environ['PATH'],'SCENARIO':scenario,'ORIGINAL':str(p/'config/homeproxy'),'ACTIONS':str(p/'actions'),'SERVICE_STATE':state,'VIA_PROXY':proxy,'HP_RESOURCES_CHANGED':resources},capture_output=True,text=True)
+      target='src_fixture' if resources=='1' else ''
+      r=subprocess.run(['sh',str(p/'transaction'),*([target] if target else [])],env={**os.environ,'PATH':str(p/'bin')+':'+os.environ['PATH'],'SCENARIO':scenario,'ORIGINAL':str(p/'config/homeproxy'),'ACTIONS':str(p/'actions'),'SERVICE_STATE':state,'VIA_PROXY':proxy,'HP_RESOURCES_CHANGED':resources,'EXPECTED_SOURCE':target},capture_output=True,text=True)
       client,server=state.split();activation=client=='1' and (scenario in ['valid','restart-failed','rollback-conflict','disabled'] or scenario=='noop' and resources=='1')
       failed=scenario in ['invalid','concurrent','fetch-failed'] or (activation and scenario not in ['valid','noop'])
       self.assertEqual(r.returncode!=0,failed,r.stderr)
