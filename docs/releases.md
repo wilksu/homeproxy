@@ -56,11 +56,25 @@ run can add a previously unbuilt architecture to the same
 asset. Core releases are never marked as the repository's latest application
 release.
 
-Each target uses a pinned ImmortalWrt 25.12 SDK and the source version/hash from
-the compatibility manifest. The workflow builds only sing-box, replaces the
-SDK package signature with the HomeProxy APK signature, checks package metadata,
-build tags and native API symbols, and publishes an architecture-qualified APK,
-SHA256 file and provenance JSON.
+The workflow verifies the pinned upstream source archive and follows sing-box's
+normal Linux release model: a static `CGO_ENABLED=0` Go build with pinned tags
+and linker flags. It does not download an OpenWrt or ImmortalWrt SDK. The APK
+contains sing-box only; dependencies remain metadata constraints resolved from
+the router's configured official repositories during installation.
+
+The resulting APK is signed with the HomeProxy key, then its package metadata,
+build tags and native API symbols are checked before publishing an
+architecture-qualified APK, SHA256 file and provenance JSON. Manual runs can
+disable publishing for safe validation on `dev`.
+
+This core APK is not tied to an OpenWrt SDK, C library, or compiler release: the
+binary is statically linked and the target baseline is recorded per CPU
+architecture. It is still an APK v3 package, so it targets OpenWrt/ImmortalWrt
+releases using `apk-tools`; older `opkg` releases need an IPK instead. The core
+package declares but does not bundle system dependencies such as `ca-bundle`
+and `kmod-tun`. Those packages are resolved from the repositories configured on
+the router. A future distribution update only needs repository changes here if
+APK metadata/schema or dependency package names become incompatible.
 
 ## Maintainer release process
 
