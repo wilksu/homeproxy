@@ -177,10 +177,10 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo -E apt-get update -qq
-          sudo -E apt-get install -y build-essential libssl-dev meson ninja-build
+          sudo -E apt-get install -y build-essential libssl-dev lua5.1 meson ninja-build
           meson setup apk-tools/build apk-tools \
             -Db_lto=true -Dcompressed-help=false -Ddocs=disabled -Dhelp=enabled \
-            -Ddefault_library=static -Durl_backend=wget -Dzstd=false \
+            -Dlua_version=5.1 -Ddefault_library=static -Durl_backend=wget -Dzstd=false \
             -Dpython=disabled -Dtests=disabled -Dcrypto_backend=openssl
           ninja -C apk-tools/build
           sudo -E meson install -C apk-tools/build --strip
