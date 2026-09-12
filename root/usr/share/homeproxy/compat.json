@@ -7,6 +7,34 @@
   "dashboard_commit": "c285014d351a685d8a100db0d5bf47ad9bdad76f",
   "dashboard_sha256": "8de8de232f7e5073bfdd93a859c75691966fa6aef20c01c38aeb61da1791b0bd",
   "dashboard_package_version": "2026.09.03-r1",
+  "core_build_tags": [
+    "with_acme",
+    "with_clash_api",
+    "with_dhcp",
+    "with_gvisor",
+    "with_quic",
+    "with_tailscale",
+    "with_utls",
+    "with_wireguard"
+  ],
+  "core_targets": {
+    "aarch64_cortex-a53": {
+      "sdk_url": "https://downloads.immortalwrt.org/releases/25.12.0/targets/mediatek/filogic/immortalwrt-sdk-25.12.0-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64.tar.zst",
+      "sdk_sha256": "befa29f07c7922876c875d53df753d5d7c2fe2ba4b15fb40c13a2ab38587f6c3"
+    },
+    "x86_64": {
+      "sdk_url": "https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-sdk-25.12.0-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst",
+      "sdk_sha256": "c228059aa1e58c3b3ae58ce8dcc7549fd08379d8e231daf80fcca15b677564cb"
+    },
+    "aarch64_generic": {
+      "sdk_url": "https://downloads.immortalwrt.org/releases/25.12.0/targets/rockchip/armv8/immortalwrt-sdk-25.12.0-rockchip-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst",
+      "sdk_sha256": "02b4403afe37abf92a6d57a9f586e5ef42d3e23402f4b44109b668de29b5ffd8"
+    },
+    "aarch64_cortex-a72": {
+      "sdk_url": "https://downloads.immortalwrt.org/releases/25.12.0/targets/mvebu/cortexa72/immortalwrt-sdk-25.12.0-mvebu-cortexa72_gcc-14.3.0_musl.Linux-x86_64.tar.zst",
+      "sdk_sha256": "a0812e7c11e3b8bc6811eb18acaadd210c3ed4fe9ffcb252e15b70ba339fe949"
+    }
+  },
   "sdk_url": "https://downloads.immortalwrt.org/releases/25.12.0/targets/mediatek/filogic/immortalwrt-sdk-25.12.0-mediatek-filogic_gcc-14.3.0_musl.Linux-x86_64.tar.zst",
   "sdk_sha256": "befa29f07c7922876c875d53df753d5d7c2fe2ba4b15fb40c13a2ab38587f6c3"
 }
