@@ -176,7 +176,7 @@ jobs:
             exit 1
           }
           host_apk=/tmp/homeproxy-sdk/staging_dir/host/bin/apk
-          "$host_apk" adbsign --reset-signatures --sign-key /tmp/homeproxy-apk-signing.pem "${core_packages[0]}"
+          "$host_apk" adbsign --allow-untrusted --reset-signatures --sign-key /tmp/homeproxy-apk-signing.pem "${core_packages[0]}"
           "$host_apk" --keys-dir "$GITHUB_WORKSPACE/release" verify "${core_packages[0]}"
           mkdir -p /tmp/homeproxy-release-core
           cp "${core_packages[0]}" /tmp/homeproxy-release-core/
