@@ -2,6 +2,20 @@
 import json, os, pathlib, subprocess, tempfile, unittest
 from test_generator import ROOT, UCODE
 
+class PairingManifestTests(unittest.TestCase):
+ def test_core_release_targets_are_pinned(self):
+  pairing=json.loads((ROOT/'root/usr/share/homeproxy/compat.json').read_text())
+  self.assertEqual(set(pairing['core_targets']), {
+   'aarch64_cortex-a53', 'x86_64', 'aarch64_generic', 'aarch64_cortex-a72'})
+  self.assertEqual(pairing['sdk_url'], pairing['core_targets']['aarch64_cortex-a53']['sdk_url'])
+  self.assertEqual(pairing['sdk_sha256'], pairing['core_targets']['aarch64_cortex-a53']['sdk_sha256'])
+  for target, config in pairing['core_targets'].items():
+   self.assertIn('/25.12.0/targets/', config['sdk_url'], target)
+   self.assertRegex(config['sdk_sha256'], r'^[a-f0-9]{64}$', target)
+  recipe=(ROOT/'packages/sing-box/Makefile').read_text()
+  tags=recipe.split('GO_PKG_TAGS:=',1)[1].split('\n',1)[0].split(',')
+  self.assertEqual(tags, pairing['core_build_tags'])
+
 @unittest.skipUnless(UCODE, 'UCODE is required')
 class ValidationTests(unittest.TestCase):
  def check(self, version, configs):

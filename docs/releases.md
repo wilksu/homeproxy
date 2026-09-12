@@ -41,6 +41,27 @@ URL or uploaded package, regardless of its signature. Installing by package name
 from the configured feed avoids that generic warning and retains signature
 verification.
 
+## Paired core releases
+
+The sing-box core has a separate, low-frequency release workflow. A push to
+`master` that changes `core_package_version` in
+`root/usr/share/homeproxy/compat.json` automatically builds the default
+`aarch64_cortex-a53` and `x86_64` packages. Changes to other compatibility
+metadata do not create a core release.
+
+Maintainers can also run `Build and release paired sing-box core` manually and
+select any combination of A53, x86-64, generic ARM64, and Cortex-A72. A manual
+run can add a previously unbuilt architecture to the same
+`core-v<package-version>` release, but it refuses to overwrite an existing
+asset. Core releases are never marked as the repository's latest application
+release.
+
+Each target uses a pinned ImmortalWrt 25.12 SDK and the source version/hash from
+the compatibility manifest. The workflow builds only sing-box, replaces the
+SDK package signature with the HomeProxy APK signature, checks package metadata,
+build tags and native API symbols, and publishes an architecture-qualified APK,
+SHA256 file and provenance JSON.
+
 ## Maintainer release process
 
 1. Ensure `master` is green and points to the intended release commit.

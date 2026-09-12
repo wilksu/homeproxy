@@ -1,0 +1,234 @@
+name: Build and release paired sing-box core
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - root/usr/share/homeproxy/compat.json
+  workflow_dispatch:
+    inputs:
+      aarch64_cortex_a53:
+        description: ARM64 Cortex-A53 / Filogic
+        type: boolean
+        default: true
+      x86_64:
+        description: x86-64
+        type: boolean
+        default: true
+      aarch64_generic:
+        description: Generic ARM64 / Rockchip armv8
+        type: boolean
+        default: false
+      aarch64_cortex_a72:
+        description: ARM64 Cortex-A72 / mvebu
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: paired-core-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      package_version: ${{ steps.plan.outputs.package_version }}
+      release_tag: ${{ steps.plan.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - id: plan
+        name: Resolve version change and selected architectures
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          SELECT_A53: ${{ inputs.aarch64_cortex_a53 }}
+          SELECT_X86: ${{ inputs.x86_64 }}
+          SELECT_GENERIC: ${{ inputs.aarch64_generic }}
+          SELECT_A72: ${{ inputs.aarch64_cortex_a72 }}
+        run: |
+          set -euo pipefail
+          manifest=root/usr/share/homeproxy/compat.json
+          package_version=$(jq -er '.core_package_version' "$manifest")
+          source_version=$(jq -er '.core_version' "$manifest")
+          [[ "$package_version" =~ ^${source_version}-r[0-9]+$ ]] || {
+            echo "Invalid paired package version: $package_version" >&2
+            exit 1
+          }
+
+          build=true
+          selected=()
+          if [[ "$EVENT_NAME" == push ]]; then
+            selected=(aarch64_cortex-a53 x86_64)
+            if [[ -n "$BEFORE_SHA" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+              old_version=$(git show "$BEFORE_SHA:$manifest" 2>/dev/null | jq -r '.core_package_version // empty' || true)
+              if [[ "$old_version" == "$package_version" ]]; then
+                build=false
+                echo "Core package version is unchanged ($package_version); no release required."
+              fi
+            fi
+          else
+            [[ "$SELECT_A53" == true ]] && selected+=(aarch64_cortex-a53)
+            [[ "$SELECT_X86" == true ]] && selected+=(x86_64)
+            [[ "$SELECT_GENERIC" == true ]] && selected+=(aarch64_generic)
+            [[ "$SELECT_A72" == true ]] && selected+=(aarch64_cortex-a72)
+          fi
+
+          if [[ "$build" == true && ${#selected[@]} -eq 0 ]]; then
+            echo 'Select at least one architecture.' >&2
+            exit 1
+          fi
+
+          rows=()
+          for target in "${selected[@]}"; do
+            row=$(jq -cer --arg target "$target" '
+              .core_targets[$target] + {target: $target}
+              | select(.sdk_url and .sdk_sha256)
+            ' "$manifest")
+            rows+=("$row")
+          done
+          matrix=$(printf '%s\n' "${rows[@]}" | jq -cs '{include: .}')
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "package_version=$package_version" >> "$GITHUB_OUTPUT"
+          echo "release_tag=core-v$package_version" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | jq .
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install SDK prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -y build-essential clang flex bison g++ gawk gettext git libncurses-dev libssl-dev python3 rsync unzip zstd file wget
+
+      - name: Download pinned SDK
+        env:
+          SDK_URL: ${{ matrix.sdk_url }}
+          SDK_SHA256: ${{ matrix.sdk_sha256 }}
+        run: |
+          curl --fail --location --retry 3 "$SDK_URL" -o /tmp/homeproxy-sdk.tar.zst
+          echo "$SDK_SHA256  /tmp/homeproxy-sdk.tar.zst" | sha256sum -c -
+          mkdir /tmp/homeproxy-sdk
+          tar --zstd -xf /tmp/homeproxy-sdk.tar.zst -C /tmp/homeproxy-sdk --strip-components=1
+
+      - name: Build paired core package
+        run: scripts/build-core-sdk.sh /tmp/homeproxy-sdk
+
+      - name: Sign and validate package
+        env:
+          SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
+          PACKAGE_VERSION: ${{ needs.prepare.outputs.package_version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          [ -n "$SIGNING_KEY" ] || { echo 'APK_SIGNING_KEY is not configured' >&2; exit 1; }
+          printf '%s\n' "$SIGNING_KEY" > /tmp/homeproxy-apk-signing.pem
+          chmod 0600 /tmp/homeproxy-apk-signing.pem
+          openssl pkey -in /tmp/homeproxy-apk-signing.pem -pubout -out /tmp/homeproxy-apk-public.pem
+          cmp /tmp/homeproxy-apk-public.pem release/homeproxy-apk.pem
+
+          mapfile -t packages < <(find /tmp/homeproxy-sdk/bin/packages -type f -name "sing-box-${PACKAGE_VERSION}.apk")
+          [ "${#packages[@]}" -eq 1 ] || {
+            printf 'Expected one sing-box package, found %d\n' "${#packages[@]}" >&2
+            exit 1
+          }
+          host_apk=/tmp/homeproxy-sdk/staging_dir/host/bin/apk
+          "$host_apk" adbsign --allow-untrusted --reset-signatures \
+            --sign-key /tmp/homeproxy-apk-signing.pem "${packages[0]}"
+          "$host_apk" --keys-dir "$GITHUB_WORKSPACE/release" verify "${packages[0]}"
+
+          metadata=$($host_apk adbdump "${packages[0]}")
+          grep -q "  name: sing-box$" <<<"$metadata"
+          grep -q "  version: ${PACKAGE_VERSION}$" <<<"$metadata"
+          grep -q "  arch: ${TARGET}$" <<<"$metadata"
+
+          extract=/tmp/core-extract
+          "$host_apk" --allow-untrusted extract --destination "$extract" "${packages[0]}"
+          binary="$extract/usr/bin/sing-box"
+          [ -x "$binary" ]
+          strings "$binary" > /tmp/core-strings.txt
+          tags=$(awk '/^build[[:space:]]+-tags=/{sub(/^build[[:space:]]+-tags=/, ""); print; exit}' /tmp/core-strings.txt)
+          expected=$(jq -r '.core_build_tags | join(",")' root/usr/share/homeproxy/compat.json)
+          [ "$tags" = "$expected" ] || {
+            echo "Unexpected build tags: $tags (expected $expected)" >&2
+            exit 1
+          }
+          grep -q '/daemon.StartedService/GetVersion' /tmp/core-strings.txt
+          grep -q '/daemon.StartedService/SubscribeConnections' /tmp/core-strings.txt
+
+          output=/tmp/core-release
+          mkdir "$output"
+          asset="sing-box-${PACKAGE_VERSION}-${TARGET}.apk"
+          cp "${packages[0]}" "$output/$asset"
+          sha256sum "$output/$asset" > "$output/$asset.sha256"
+          jq -n \
+            --arg target "$TARGET" \
+            --arg package_version "$PACKAGE_VERSION" \
+            --arg tags "$tags" \
+            --arg sdk_url "${{ matrix.sdk_url }}" \
+            --arg sdk_sha256 "${{ matrix.sdk_sha256 }}" \
+            --arg package_sha256 "$(sha256sum "$output/$asset" | cut -d' ' -f1)" \
+            --argjson installed_size "$(wc -c < "$binary")" \
+            '{target:$target,package_version:$package_version,build_tags:($tags|split(",")),sdk_url:$sdk_url,sdk_sha256:$sdk_sha256,package_sha256:$package_sha256,core_binary_bytes:$installed_size}' \
+            > "$output/sing-box-${PACKAGE_VERSION}-${TARGET}.json"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: paired-core-${{ matrix.target }}
+          path: /tmp/core-release/
+          if-no-files-found: error
+
+  release:
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: paired-core-*
+          path: /tmp/core-release
+          merge-multiple: true
+
+      - name: Create or extend core release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          PACKAGE_VERSION: ${{ needs.prepare.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --latest=false \
+              --title "HomeProxy paired sing-box $PACKAGE_VERSION" \
+              --notes "Architecture-specific sing-box packages built from the HomeProxy pinned source and ImmortalWrt 25.12 SDKs. These packages are signed with the HomeProxy APK key."
+          fi
+
+          existing=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+          while IFS= read -r asset; do
+            name=$(basename "$asset")
+            if grep -Fxq "$name" <<<"$existing"; then
+              echo "Release asset already exists; refusing to overwrite: $name" >&2
+              exit 1
+            fi
+          done < <(find /tmp/core-release -type f -print)
+          gh release upload "$RELEASE_TAG" /tmp/core-release/*
