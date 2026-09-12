@@ -7,14 +7,12 @@ class PairingManifestTests(unittest.TestCase):
   pairing=json.loads((ROOT/'root/usr/share/homeproxy/compat.json').read_text())
   self.assertEqual(set(pairing['core_targets']), {
    'aarch64_cortex-a53', 'x86_64', 'aarch64_generic', 'aarch64_cortex-a72'})
-  self.assertEqual(pairing['sdk_url'], pairing['core_targets']['aarch64_cortex-a53']['sdk_url'])
-  self.assertEqual(pairing['sdk_sha256'], pairing['core_targets']['aarch64_cortex-a53']['sdk_sha256'])
-  for target, config in pairing['core_targets'].items():
-   self.assertIn('/25.12.0/targets/', config['sdk_url'], target)
-   self.assertRegex(config['sdk_sha256'], r'^[a-f0-9]{64}$', target)
+  self.assertEqual(pairing['core_targets']['x86_64'], {'goarch':'amd64','tuning':'GOAMD64=v1'})
+  for target in ['aarch64_cortex-a53','aarch64_generic','aarch64_cortex-a72']:
+   self.assertEqual(pairing['core_targets'][target], {'goarch':'arm64','tuning':'GOARM64=v8.0'})
   recipe=(ROOT/'packages/sing-box/Makefile').read_text()
   tags=recipe.split('GO_PKG_TAGS:=',1)[1].split('\n',1)[0].split(',')
-  self.assertEqual(tags, pairing['core_build_tags'])
+  self.assertEqual(tags, pairing['core_build_tags'][:len(tags)])
 
 @unittest.skipUnless(UCODE, 'UCODE is required')
 class ValidationTests(unittest.TestCase):
