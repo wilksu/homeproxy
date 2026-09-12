@@ -35,7 +35,7 @@ if [ -n "$LANGUAGE" ]; then
  APK_DEPENDS="luci-app-homeproxy"
  IPK_DEPENDS="luci-app-homeproxy"
 fi
-if [ "$RELEASE_TYPE" == "release" ]; then
+if [ "$RELEASE_TYPE" == "release" ] && [ -z "${PKG_VERSION:-}" ]; then
 	PKG_VERSION="$(get_mk_value "PKG_VERSION")"
 fi
 if [ -z "${PKG_VERSION:-}" ]; then

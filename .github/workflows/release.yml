@@ -123,7 +123,7 @@ jobs:
           fakeroot bash build-ipk.sh apk release
           fakeroot bash build-ipk.sh ipk release
           popd
-          apk --keys-dir release verify .github/*.apk
+          apk --keys-dir "$GITHUB_WORKSPACE/release" verify .github/*.apk
 
       - name: Stage application packages and host APK tool
         run: |
@@ -177,7 +177,7 @@ jobs:
           }
           host_apk=/tmp/homeproxy-sdk/staging_dir/host/bin/apk
           "$host_apk" adbsign --reset-signatures --sign-key /tmp/homeproxy-apk-signing.pem "${core_packages[0]}"
-          "$host_apk" --keys-dir release verify "${core_packages[0]}"
+          "$host_apk" --keys-dir "$GITHUB_WORKSPACE/release" verify "${core_packages[0]}"
           mkdir -p /tmp/homeproxy-release-core
           cp "${core_packages[0]}" /tmp/homeproxy-release-core/
 
@@ -216,11 +216,11 @@ jobs:
           cp release/homeproxy-apk.pem /tmp/homeproxy-release/homeproxy-apk.pem
 
           /tmp/apk mkndx \
-            --keys-dir release \
+            --keys-dir "$GITHUB_WORKSPACE/release" \
             --sign-key /tmp/homeproxy-apk-signing.pem \
             --output /tmp/homeproxy-release/packages.adb \
             /tmp/homeproxy-release/*.apk
-          /tmp/apk --keys-dir release verify \
+          /tmp/apk --keys-dir "$GITHUB_WORKSPACE/release" verify \
             /tmp/homeproxy-release/*.apk \
             /tmp/homeproxy-release/packages.adb
 
