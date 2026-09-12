@@ -11,6 +11,7 @@ class CorePackageTests(unittest.TestCase):
    binary=payload/'usr/bin/sing-box'; binary.write_text('binary'); binary.chmod(0o755)
    key=tmp/'key.pem'; key.write_text('key')
    capture=tmp/'args.json'
+   chown=tools/'chown'; chown.write_text('#!/bin/sh\nexit 0\n'); chown.chmod(0o755)
    apk=tools/'apk'; apk.write_text('''#!/usr/bin/env python3
 import json,os,pathlib,sys
 args=sys.argv[1:]

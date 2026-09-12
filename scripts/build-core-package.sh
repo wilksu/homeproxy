@@ -16,6 +16,7 @@ mkdir -p "$root_dir/lib/apk/packages" "$output_dir"
 
 printf '%s\n' 'sing-box=5566:sing-box=5566' > "$root_dir/lib/apk/packages/sing-box.rusers"
 find "$root_dir" -type f,l -printf '/%P\n' | sort > "$root_dir/lib/apk/packages/sing-box.list"
+chown -R 0:0 "$root_dir"
 
 post_install=$(mktemp)
 trap 'rm -f "$post_install"' EXIT

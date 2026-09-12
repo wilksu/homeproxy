@@ -177,7 +177,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo -E apt-get update -qq
-          sudo -E apt-get install -y build-essential libssl-dev lua5.1 meson ninja-build
+          sudo -E apt-get install -y build-essential fakeroot libssl-dev lua5.1 meson ninja-build
           meson setup apk-tools/build apk-tools \
             -Db_lto=true -Dcompressed-help=false -Ddocs=disabled -Dhelp=enabled \
             -Dlua_version=5.1 -Ddefault_library=static -Durl_backend=wget -Dzstd=false \
@@ -201,7 +201,7 @@ jobs:
 
           output=/tmp/core-release
           mkdir "$output"
-          APK_SIGNING_KEY_FILE=/tmp/homeproxy-apk-signing.pem \
+          fakeroot env APK_SIGNING_KEY_FILE=/tmp/homeproxy-apk-signing.pem \
             scripts/build-core-package.sh /tmp/core-root "$TARGET" "$PACKAGE_VERSION" "$output"
           package="$output/sing-box-${PACKAGE_VERSION}-${TARGET}.apk"
           apk --keys-dir "$GITHUB_WORKSPACE/release" verify "$package"
@@ -221,7 +221,8 @@ jobs:
           grep -aq '/daemon.StartedService/GetVersion' /tmp/core-root/usr/bin/sing-box
           grep -aq '/daemon.StartedService/SubscribeConnections' /tmp/core-root/usr/bin/sing-box
 
-          sha256sum "$package" > "$package.sha256"
+          package_name=$(basename "$package")
+          (cd "$output" && sha256sum "$package_name" > "$package_name.sha256")
           jq -n \
             --arg target "$TARGET" \
             --arg package_version "$PACKAGE_VERSION" \
