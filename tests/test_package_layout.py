@@ -21,7 +21,11 @@ else:
 shutil.copytree(src,out/src.name);(out/(src.name+'.args')).write_text(json.dumps(a));dest.touch()
 '''
     for name in ['apk','ipkg-build','po2lmo']:(bin/name).write_text(fake);(bin/name).chmod(0o755)
-    r=subprocess.run(['bash',str(repo/'.github/build-ipk.sh'),manager,'snapshot'],cwd=ROOT,env={**os.environ,'PATH':str(bin)+':'+os.environ['PATH'],'CAPTURE':str(capture)},capture_output=True,text=True)
+    env={**os.environ,'PATH':str(bin)+':'+os.environ['PATH'],'CAPTURE':str(capture)}
+    if manager=='apk':
+     key=p/'signing.pem';key.write_text('test key')
+     env['APK_SIGNING_KEY_FILE']=str(key)
+    r=subprocess.run(['bash',str(repo/'.github/build-ipk.sh'),manager,'snapshot'],cwd=ROOT,env=env,capture_output=True,text=True)
     self.assertEqual(r.returncode,0,r.stderr)
     main=capture/'luci-app-homeproxy';lang=capture/'luci-i18n-homeproxy-zh-cn'
     self.assertTrue(main.exists());self.assertTrue(lang.exists())
@@ -30,3 +34,7 @@ shutil.copytree(src,out/src.name);(out/(src.name+'.args')).write_text(json.dumps
     self.assertFalse((lang/'etc/config/homeproxy').exists())
     self.assertIn('luci.languages.zh_cn',(lang/'etc/uci-defaults/luci-i18n-homeproxy-zh-cn').read_text())
     self.assertEqual(len(list((repo/'.github').glob('*.'+manager))),2)
+    if manager=='apk':
+     self.assertEqual(len(list((repo/'.github').glob('luci-*-*.apk'))),2)
+     args=json.loads((capture/'luci-app-homeproxy.args').read_text())
+     self.assertEqual(args[args.index('--sign-key')+1],str(key))
