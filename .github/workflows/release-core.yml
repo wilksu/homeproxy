@@ -17,13 +17,17 @@ on:
         type: boolean
         default: true
       aarch64_generic:
-        description: Generic ARM64 / Rockchip armv8
+        description: Generic ARM64
         type: boolean
         default: false
       aarch64_cortex_a72:
-        description: ARM64 Cortex-A72 / mvebu
+        description: ARM64 Cortex-A72
         type: boolean
         default: false
+      publish_release:
+        description: Publish or extend the core GitHub Release
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -37,7 +41,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build: ${{ steps.plan.outputs.build }}
+      publish: ${{ steps.plan.outputs.publish }}
       matrix: ${{ steps.plan.outputs.matrix }}
+      source_version: ${{ steps.plan.outputs.source_version }}
       package_version: ${{ steps.plan.outputs.package_version }}
       release_tag: ${{ steps.plan.outputs.release_tag }}
     steps:
@@ -54,6 +60,7 @@ jobs:
           SELECT_X86: ${{ inputs.x86_64 }}
           SELECT_GENERIC: ${{ inputs.aarch64_generic }}
           SELECT_A72: ${{ inputs.aarch64_cortex_a72 }}
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
         run: |
           set -euo pipefail
           manifest=root/usr/share/homeproxy/compat.json
@@ -65,8 +72,10 @@ jobs:
           }
 
           build=true
+          publish="$PUBLISH_RELEASE"
           selected=()
           if [[ "$EVENT_NAME" == push ]]; then
+            publish=true
             selected=(aarch64_cortex-a53 x86_64)
             if [[ -n "$BEFORE_SHA" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
               old_version=$(git show "$BEFORE_SHA:$manifest" 2>/dev/null | jq -r '.core_package_version // empty' || true)
@@ -81,6 +90,7 @@ jobs:
             [[ "$SELECT_GENERIC" == true ]] && selected+=(aarch64_generic)
             [[ "$SELECT_A72" == true ]] && selected+=(aarch64_cortex-a72)
           fi
+          [[ "$publish" == true || "$publish" == false ]] || publish=false
 
           if [[ "$build" == true && ${#selected[@]} -eq 0 ]]; then
             echo 'Select at least one architecture.' >&2
@@ -91,13 +101,15 @@ jobs:
           for target in "${selected[@]}"; do
             row=$(jq -cer --arg target "$target" '
               .core_targets[$target] + {target: $target}
-              | select(.sdk_url and .sdk_sha256)
+              | select(.goarch)
             ' "$manifest")
             rows+=("$row")
           done
           matrix=$(printf '%s\n' "${rows[@]}" | jq -cs '{include: .}')
           echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "source_version=$source_version" >> "$GITHUB_OUTPUT"
           echo "package_version=$package_version" >> "$GITHUB_OUTPUT"
           echo "release_tag=core-v$package_version" >> "$GITHUB_OUTPUT"
           echo "$matrix" | jq .
@@ -106,33 +118,78 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.build == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install SDK prerequisites
-        run: sudo apt-get update -qq && sudo apt-get install -y build-essential clang flex bison g++ gawk gettext git libncurses-dev libssl-dev python3 rsync unzip zstd file wget
-
-      - name: Download pinned SDK
+      - name: Download and verify pinned sing-box source
         env:
-          SDK_URL: ${{ matrix.sdk_url }}
-          SDK_SHA256: ${{ matrix.sdk_sha256 }}
+          SOURCE_VERSION: ${{ needs.prepare.outputs.source_version }}
         run: |
-          curl --fail --location --retry 3 "$SDK_URL" -o /tmp/homeproxy-sdk.tar.zst
-          echo "$SDK_SHA256  /tmp/homeproxy-sdk.tar.zst" | sha256sum -c -
-          mkdir /tmp/homeproxy-sdk
-          tar --zstd -xf /tmp/homeproxy-sdk.tar.zst -C /tmp/homeproxy-sdk --strip-components=1
+          source_hash=$(python3 scripts/pairing.py core_source_sha256)
+          curl --fail --location --retry 3 \
+            "https://codeload.github.com/SagerNet/sing-box/tar.gz/v$SOURCE_VERSION" \
+            -o /tmp/sing-box.tar.gz
+          echo "$source_hash  /tmp/sing-box.tar.gz" | sha256sum -c -
+          mkdir sing-box
+          tar -xzf /tmp/sing-box.tar.gz -C sing-box --strip-components=1
 
-      - name: Build paired core package
-        run: scripts/build-core-sdk.sh /tmp/homeproxy-sdk
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: sing-box/go.mod
+          cache-dependency-path: sing-box/go.sum
 
-      - name: Sign and validate package
+      - name: Build static sing-box binary
+        env:
+          SOURCE_VERSION: ${{ needs.prepare.outputs.source_version }}
+          GOARCH: ${{ matrix.goarch }}
+          TUNING: ${{ matrix.tuning }}
+        working-directory: sing-box
+        run: |
+          set -euo pipefail
+          export GOOS=linux CGO_ENABLED=0 GOTOOLCHAIN=local
+          case "$TUNING" in
+            GOARM64=*) export GOARM64="${TUNING#*=}" ;;
+            GOAMD64=*) export GOAMD64="${TUNING#*=}" ;;
+            *) echo "Unsupported target tuning: $TUNING" >&2; exit 1 ;;
+          esac
+          tags=$(jq -r '.core_build_tags | join(",")' ../root/usr/share/homeproxy/compat.json)
+          shared_ldflags=$(cat release/LDFLAGS)
+          mkdir -p /tmp/core-root/usr/bin
+          go build -trimpath \
+            -tags "$tags" \
+            -ldflags "-X github.com/sagernet/sing-box/constant.Version=$SOURCE_VERSION $shared_ldflags -s -w -buildid=" \
+            -o /tmp/core-root/usr/bin/sing-box ./cmd/sing-box
+          go version -m /tmp/core-root/usr/bin/sing-box > /tmp/core-build-info.txt
+
+      - uses: actions/checkout@v6
+        with:
+          repository: alpinelinux/apk-tools
+          path: apk-tools
+          fetch-depth: 1
+          ref: b5a31c0d865342ad80be10d68f1bb3d3ad9b0866
+
+      - name: Build pinned host APK tool
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt-get update -qq
+          sudo -E apt-get install -y build-essential libssl-dev meson ninja-build
+          meson setup apk-tools/build apk-tools \
+            -Db_lto=true -Dcompressed-help=false -Ddocs=disabled -Dhelp=enabled \
+            -Ddefault_library=static -Durl_backend=wget -Dzstd=false \
+            -Dpython=disabled -Dtests=disabled -Dcrypto_backend=openssl
+          ninja -C apk-tools/build
+          sudo -E meson install -C apk-tools/build --strip
+
+      - name: Package, sign and validate core
         env:
           SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
           PACKAGE_VERSION: ${{ needs.prepare.outputs.package_version }}
+          SOURCE_VERSION: ${{ needs.prepare.outputs.source_version }}
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
@@ -142,49 +199,38 @@ jobs:
           openssl pkey -in /tmp/homeproxy-apk-signing.pem -pubout -out /tmp/homeproxy-apk-public.pem
           cmp /tmp/homeproxy-apk-public.pem release/homeproxy-apk.pem
 
-          mapfile -t packages < <(find /tmp/homeproxy-sdk/bin/packages -type f -name "sing-box-${PACKAGE_VERSION}.apk")
-          [ "${#packages[@]}" -eq 1 ] || {
-            printf 'Expected one sing-box package, found %d\n' "${#packages[@]}" >&2
-            exit 1
-          }
-          host_apk=/tmp/homeproxy-sdk/staging_dir/host/bin/apk
-          "$host_apk" adbsign --allow-untrusted --reset-signatures \
-            --sign-key /tmp/homeproxy-apk-signing.pem "${packages[0]}"
-          "$host_apk" --keys-dir "$GITHUB_WORKSPACE/release" verify "${packages[0]}"
+          output=/tmp/core-release
+          mkdir "$output"
+          APK_SIGNING_KEY_FILE=/tmp/homeproxy-apk-signing.pem \
+            scripts/build-core-package.sh /tmp/core-root "$TARGET" "$PACKAGE_VERSION" "$output"
+          package="$output/sing-box-${PACKAGE_VERSION}-${TARGET}.apk"
+          apk --keys-dir "$GITHUB_WORKSPACE/release" verify "$package"
 
-          metadata=$($host_apk adbdump "${packages[0]}")
+          metadata=$(apk adbdump "$package")
           grep -q "  name: sing-box$" <<<"$metadata"
           grep -q "  version: ${PACKAGE_VERSION}$" <<<"$metadata"
           grep -q "  arch: ${TARGET}$" <<<"$metadata"
+          expected_tags=$(jq -r '.core_build_tags | join(",")' root/usr/share/homeproxy/compat.json)
+          grep -q "build[[:space:]]*-tags=${expected_tags}" /tmp/core-build-info.txt
 
-          extract=/tmp/core-extract
-          "$host_apk" --allow-untrusted extract --destination "$extract" "${packages[0]}"
-          binary="$extract/usr/bin/sing-box"
-          [ -x "$binary" ]
-          strings "$binary" > /tmp/core-strings.txt
-          tags=$(awk '/^build[[:space:]]+-tags=/{sub(/^build[[:space:]]+-tags=/, ""); print; exit}' /tmp/core-strings.txt)
-          expected=$(jq -r '.core_build_tags | join(",")' root/usr/share/homeproxy/compat.json)
-          [ "$tags" = "$expected" ] || {
-            echo "Unexpected build tags: $tags (expected $expected)" >&2
-            exit 1
-          }
-          grep -q '/daemon.StartedService/GetVersion' /tmp/core-strings.txt
-          grep -q '/daemon.StartedService/SubscribeConnections' /tmp/core-strings.txt
+          if [[ "$TARGET" == x86_64 ]]; then
+            /tmp/core-root/usr/bin/sing-box version | grep -Fx "sing-box version $SOURCE_VERSION"
+            printf '{"inbounds":[],"outbounds":[]}' > /tmp/minimal.json
+            /tmp/core-root/usr/bin/sing-box check -c /tmp/minimal.json
+          fi
+          grep -aq '/daemon.StartedService/GetVersion' /tmp/core-root/usr/bin/sing-box
+          grep -aq '/daemon.StartedService/SubscribeConnections' /tmp/core-root/usr/bin/sing-box
 
-          output=/tmp/core-release
-          mkdir "$output"
-          asset="sing-box-${PACKAGE_VERSION}-${TARGET}.apk"
-          cp "${packages[0]}" "$output/$asset"
-          sha256sum "$output/$asset" > "$output/$asset.sha256"
+          sha256sum "$package" > "$package.sha256"
           jq -n \
             --arg target "$TARGET" \
             --arg package_version "$PACKAGE_VERSION" \
-            --arg tags "$tags" \
-            --arg sdk_url "${{ matrix.sdk_url }}" \
-            --arg sdk_sha256 "${{ matrix.sdk_sha256 }}" \
-            --arg package_sha256 "$(sha256sum "$output/$asset" | cut -d' ' -f1)" \
-            --argjson installed_size "$(wc -c < "$binary")" \
-            '{target:$target,package_version:$package_version,build_tags:($tags|split(",")),sdk_url:$sdk_url,sdk_sha256:$sdk_sha256,package_sha256:$package_sha256,core_binary_bytes:$installed_size}' \
+            --arg source_version "$SOURCE_VERSION" \
+            --arg tags "$expected_tags" \
+            --arg source_sha256 "$(python3 scripts/pairing.py core_source_sha256)" \
+            --arg package_sha256 "$(sha256sum "$package" | cut -d' ' -f1)" \
+            --argjson core_binary_bytes "$(wc -c < /tmp/core-root/usr/bin/sing-box)" \
+            '{target:$target,package_version:$package_version,source_version:$source_version,build_tags:($tags|split(",")),source_sha256:$source_sha256,package_sha256:$package_sha256,core_binary_bytes:$core_binary_bytes,cgo_enabled:false}' \
             > "$output/sing-box-${PACKAGE_VERSION}-${TARGET}.json"
 
       - uses: actions/upload-artifact@v7
@@ -197,7 +243,7 @@ jobs:
     needs:
       - prepare
       - build
-    if: needs.prepare.outputs.build == 'true'
+    if: needs.prepare.outputs.build == 'true' && needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -220,7 +266,7 @@ jobs:
               --target "$GITHUB_SHA" \
               --latest=false \
               --title "HomeProxy paired sing-box $PACKAGE_VERSION" \
-              --notes "Architecture-specific sing-box packages built from the HomeProxy pinned source and ImmortalWrt 25.12 SDKs. These packages are signed with the HomeProxy APK key."
+              --notes "Architecture-specific sing-box packages built directly from the pinned upstream source with CGO disabled and signed with the HomeProxy APK key."
           fi
 
           existing=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
