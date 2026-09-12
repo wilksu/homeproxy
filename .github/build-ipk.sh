@@ -48,6 +48,11 @@ TEMP_PKG_DIR="$TEMP_DIR/$PKG_NAME"
 mkdir -p "$TEMP_PKG_DIR/lib/upgrade/keep.d/"
 mkdir -p "$TEMP_PKG_DIR/www/"
 if [ "$PKG_MGR" == "apk" ]; then
+	APK_SIGN_ARGS=()
+	if [ -n "${APK_SIGNING_KEY_FILE:-}" ]; then
+		[ -s "$APK_SIGNING_KEY_FILE" ] || { echo "APK signing key is missing" >&2; exit 1; }
+		APK_SIGN_ARGS=(--sign-key "$APK_SIGNING_KEY_FILE")
+	fi
 	mkdir -p "$TEMP_PKG_DIR/lib/apk/packages/"
 else
 	mkdir -p "$TEMP_PKG_DIR/CONTROL/"
@@ -121,6 +126,7 @@ export pkgname="'"$PKG_NAME"'"
 default_prerm' > "$TEMP_DIR/pre-deinstall"
 
 	apk mkpkg \
+		"${APK_SIGN_ARGS[@]}" \
 		--info "name:$PKG_NAME" \
 		--info "version:$PKG_VERSION" \
 		--info "description:The modern ImmortalWrt proxy platform for ARM64/AMD64" \
@@ -134,9 +140,9 @@ default_prerm' > "$TEMP_DIR/pre-deinstall"
 		--script "pre-deinstall:$TEMP_DIR/pre-deinstall" \
 		--info "depends:$APK_DEPENDS" \
 		--files "$TEMP_PKG_DIR" \
-		--output "$TEMP_DIR/${PKG_NAME}_${PKG_VERSION}.apk"
+		--output "$TEMP_DIR/${PKG_NAME}-${PKG_VERSION}.apk"
 
-	mv "$TEMP_DIR/${PKG_NAME}_${PKG_VERSION}.apk" "$BASE_DIR/${PKG_NAME}_${PKG_VERSION}_all.apk"
+	mv "$TEMP_DIR/${PKG_NAME}-${PKG_VERSION}.apk" "$BASE_DIR/${PKG_NAME}-${PKG_VERSION}.apk"
 else
 	mkdir -p "$TEMP_PKG_DIR/CONTROL/"
 
