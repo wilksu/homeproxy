@@ -158,6 +158,7 @@ jobs:
           grep -q "  arch: ${TARGET}$" <<<"$metadata"
 
           extract=/tmp/core-extract
+          mkdir "$extract"
           "$host_apk" --allow-untrusted extract --destination "$extract" "${packages[0]}"
           binary="$extract/usr/bin/sing-box"
           [ -x "$binary" ]
