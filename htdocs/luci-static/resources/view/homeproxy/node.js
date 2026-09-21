@@ -36,14 +36,222 @@ function nodeReferences(sections, deleted) {
  return [...new Set(references)];
 }
 
+function subscriptionMatchesNode(uciConfig, section_id, info) {
+	const sourceID = uci.get(uciConfig, section_id, 'source_id');
+	return sourceID ? !!info.id && info.id === sourceID :
+		!!info.hash && info.hash === uci.get(uciConfig, section_id, 'grouphash');
+}
+
+function isSubscriptionNode(uciConfig, section_id, subscriptions) {
+	return subscriptions.some(info => subscriptionMatchesNode(uciConfig, section_id, info));
+}
+
+function subscriptionNodeIDs(sections) {
+	return sections
+		.filter(section => section['.type'] === 'node' && (section.source_id || section.grouphash))
+		.map(section => section['.name']);
+}
+
+function validateSubscriptionURLs(values) {
+	const list = Array.isArray(values) ? values : (values ? [values] : []);
+	const seen = new Set();
+	for (const raw of list) {
+		let url;
+		try {
+			url = new URL(raw);
+		} catch (e) {
+			return { code: 'invalid', value: raw };
+		}
+		if (!url.hostname || !['http:', 'https:'].includes(url.protocol))
+			return { code: 'invalid', value: raw };
+
+		const clean = String(raw).replace(/#.*$/, '');
+		if (seen.has(clean))
+			return { code: 'duplicate', value: raw, clean };
+		seen.add(clean);
+	}
+	return null;
+}
+
+function applySubscriptionURLChange(uciConfig, section_id, values, calcHash) {
+	const clean = value => String(value || '').replace(/#.*$/, '');
+	const list = value => Array.isArray(value) ? value : (value ? [value] : []);
+	const previousValues = list(uci.get(uciConfig, section_id, 'subscription_url'));
+	const nextValues = list(values);
+	const previous = previousValues.map(clean);
+	const next = nextValues.map(clean);
+	const removed = [...new Set(previous.filter(url => !next.includes(url)))];
+	const added = [...new Set(next.filter(url => !previous.includes(url)))];
+
+	/* A single URL replacement is the established token-rotation operation:
+	 * retain the source identity and its nodes until the replacement is fetched. */
+	if (previous.length === 1 && next.length === 1 && removed.length === 1 && added.length === 1) {
+		const replacedSources = new Set();
+		uci.sections(uciConfig, 'subscription_source', source => {
+			if (clean(source.url) === removed[0]) {
+				replacedSources.add(source['.name']);
+				uci.set(uciConfig, source['.name'], 'url', added[0]);
+			}
+		});
+		const oldHash = calcHash(removed[0]);
+		const newHash = calcHash(added[0]);
+		uci.sections(uciConfig, 'node', node => {
+			if (node.source_id ? replacedSources.has(node.source_id) : node.grouphash === oldHash)
+				uci.set(uciConfig, node['.name'], 'grouphash', newHash);
+		});
+		uci.set(uciConfig, section_id, 'subscription_url', nextValues);
+		return { changed: true, replaced: true, removedNodes: [], removedSources: [], references: [] };
+	}
+
+	const sections = uci.sections(uciConfig);
+	const removedURLs = new Set(removed);
+	const removedHashes = new Set(removed.map(calcHash));
+	const removedSources = sections
+		.filter(source => source['.type'] === 'subscription_source' && removedURLs.has(clean(source.url)))
+		.map(source => source['.name']);
+	const sourceIDs = new Set(removedSources);
+	const removedNodes = sections
+		.filter(node => node['.type'] === 'node' &&
+			(node.source_id ? sourceIDs.has(node.source_id) : removedHashes.has(node.grouphash)))
+		.map(node => node['.name']);
+	const references = nodeReferences(sections, removedNodes);
+
+	if (references.length)
+		return { changed: false, replaced: false, removedNodes, removedSources, references };
+
+	for (const id of removedNodes)
+		uci.remove(uciConfig, id);
+	for (const id of removedSources)
+		uci.remove(uciConfig, id);
+	uci.set(uciConfig, section_id, 'subscription_url', nextValues);
+	return { changed: true, replaced: false, removedNodes, removedSources, references: [] };
+}
+
+function rollbackSubscriptionWrite(map, error) {
+	if (!map.subscriptionWritePending)
+		return Promise.reject(error);
+
+	map.subscriptionWritePending = false;
+	map.data.unload(map.config);
+	return map.data.load(map.config)
+		.then(() => map.reset())
+		.then(() => { throw error; });
+}
+
+function queueSubscriptionURLChange(map, option, section, values) {
+	if (Array.isArray(values) && !values.length &&
+		!(uci.get(map.config, section, 'subscription_url') || []).length)
+		return;
+	map.pendingSubscriptionURLChange = { section, values, option };
+}
+
+function configureSubscriptionURLWrites(option) {
+	option.write = function(section, values) {
+		queueSubscriptionURLChange(this.map, this, section, values);
+	};
+	option.remove = function(section) {
+		queueSubscriptionURLChange(this.map, this, section, []);
+	};
+}
+
+function saveNodeMap(map, mapSave, uciConfig, cb, silent, calcHash) {
+	map.pendingSubscriptionURLChange = null;
+	return mapSave.call(map, () => {
+		const pending = map.pendingSubscriptionURLChange;
+		if (pending) {
+			const { section, values, option } = pending;
+			const previousValues = uci.get(uciConfig, section, 'subscription_url') || [];
+			const problem = validateSubscriptionURLs(values);
+			let message;
+			if (problem)
+				message = problem.code === 'duplicate'
+					? _('Subscription URLs must be unique; changing the fragment does not create a new source.')
+					: _('Expecting: %s').format(_('valid HTTP or HTTPS URL'));
+			else {
+				const result = applySubscriptionURLChange(uciConfig, section, values, calcHash);
+				if (!result.changed)
+					message = _('These nodes are still referenced. Update these settings before removing the subscription:') +
+						' ' + result.references.join('; ');
+				else
+					map.subscriptionWritePending = true;
+			}
+			if (message) {
+				option.getUIElement(section)?.setValue(previousValues);
+				ui.addNotification(null, E('p', {}, message), 'error');
+				const error = new Error(message);
+				error.subscriptionURLRejected = true;
+				return Promise.reject(error);
+			}
+		}
+		return typeof cb === 'function' ? cb() : undefined;
+	}, silent).then(result => {
+		map.subscriptionWritePending = false;
+		map.pendingSubscriptionURLChange = null;
+		return result;
+	}, error => {
+		map.pendingSubscriptionURLChange = null;
+		return rollbackSubscriptionWrite(map, error);
+	});
+}
+
 function removeNode(section_id, ev) {
 	if (this.map.readonly) return;
-	const references = nodeReferences(uci.sections(this.uciconfig || this.map.config), [section_id]);
+	const config = this.uciconfig || this.map.config;
+	const references = nodeReferences(uci.sections(config), [section_id]);
 	if (references.length) {
 		ui.addNotification(null, E('p', {}, _('These nodes are still referenced. Update these settings before removing them:') + ' ' + references.join('; ')), 'error');
 		return;
 	}
-	return form.GridSection.prototype.handleRemove.call(this, section_id, ev);
+
+	const row = ev?.currentTarget?.closest('.tr');
+	const buttons = row?.parentElement ? Array.from(row.parentElement.querySelectorAll('.cbi-button-remove')) : [];
+	const buttonIndex = buttons.indexOf(ev?.currentTarget);
+	const focusTarget = buttons[buttonIndex + 1] || buttons[buttonIndex - 1];
+
+	// A row deletion changes one UCI section, so save it directly instead of
+	// parsing and reloading every node editor field.
+	this.map.data.remove(config, section_id);
+	return this.map.data.save().then(() => {
+		row?.remove();
+		requestAnimationFrame(() => focusTarget?.focus());
+	}, () => {
+		// uci.save() keeps pending deltas in the shared cache, so a rejected
+		// save would delete this node on any later save. Discard the package
+		// and re-read it from disk to make the reverted state authoritative.
+		this.map.data.unload(config);
+		return this.map.data.load(config)
+			.then(() => ui.addNotification(null,
+				E('p', {}, _('Removing the node failed. The node is still present in the configuration.')),
+				'error'));
+	});
+}
+
+function indexMapFieldsDuringDependencyCheck(map) {
+	const findElement = map.findElement;
+	const checkDepends = map.checkDepends;
+	let fields;
+
+	map.findElement = function(name, value) {
+		if (fields && name === 'data-field')
+			return fields.get(value) || null;
+		return findElement.apply(this, arguments);
+	};
+	map.checkDepends = function() {
+		if (fields || !this.root)
+			return checkDepends.apply(this, arguments);
+
+		// LuCI checks each option against fields in the entire map. Index them
+		// for this pass only; later edits and re-renders get a fresh index.
+		fields = new Map();
+		for (const field of this.root.querySelectorAll('[data-field]'))
+			if (!fields.has(field.dataset.field))
+				fields.set(field.dataset.field, field);
+		try {
+			return checkDepends.apply(this, arguments);
+		} finally {
+			fields = null;
+		}
+	};
 }
 
 function allowInsecureConfirm(ev, _section_id, value) {
@@ -421,20 +629,18 @@ function parseShareLink(uri, features) {
 }
 
 function buildNodeLabels(config) {
-	const subscriptions = (uci.get(config, 'subscription', 'subscription_url') || []).map(raw => {
-		const clean = raw.replace(/#.*$/, '');
-		let title = '';
-		try {
-			const url = new URL(raw);
-			title = url.hash ? decodeURIComponent(url.hash.slice(1)) : url.hostname;
-		} catch (e) { }
-		return { clean, hash: hp.calcStringMD5(clean), title };
-	});
-	const candidates = {}, counts = {};
+	const subscriptions = hp.getSubscriptionInfo(config);
+	const byID = Object.create(null), byHash = Object.create(null);
+	for (const source of subscriptions) {
+		if (source.id)
+			byID[source.id] = source;
+		byHash[source.hash] = source;
+	}
+	const candidates = Object.create(null), counts = Object.create(null);
 	uci.sections(config, 'node', n => {
-		let sourceURL = n.source_id ? uci.get(config, n.source_id, 'url') : '';
-		const source = subscriptions.find(s => sourceURL ? s.clean === sourceURL : n.grouphash === s.hash);
-		const value = (n.label || n['.name']) + (source?.title ? ' — ' + source.title : '');
+		const source = n.source_id ? byID[n.source_id] : byHash[n.grouphash];
+		const sourceTitle = source?.title && (source.configured ? source.title : _('Removed') + ' · ' + source.title);
+		const value = (n.label || n['.name']) + (sourceTitle ? ' — ' + sourceTitle : '');
 		candidates[n['.name']] = value;
 		counts[value] = (counts[value] || 0) + 1;
 	});
@@ -527,9 +733,13 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 		const upstream=document.getElementById('hp-original-upstream-'+sid);
 		if(upstream)upstream.textContent=mode==='reference'?inheritedUpstream(base):uci.get(data[0],sid,'node_detour')?nodeName(uci.get(data[0],sid,'node_detour')):_('Connect directly');
 	};
-	o=s.option(form.ListValue,'node_base',_('Base node'),_('Inherit server, authentication, TLS and transport settings. Local overrides are kept separately.'));
+	o=s.option(hp.CBILazyListValue,'node_base',_('Base node'),_('Inherit server, authentication, TLS and transport settings. Local overrides are kept separately.'));
 	o.depends('node_mode','reference');o.rmempty=false;o.modalonly=true;
-	o.load=function(sid){this.keylist=[];this.vallist=[];this.value('',_('Select a base node.'));uci.sections(data[0],'node',n=>{if(n['.name']!==sid && !['selector','urltest','tailscale','wireguard'].includes(n.type))this.value(n['.name'],nodeName(n['.name']));});return this.super('load',sid);};
+	o.load=function(sid){
+		this.keylist=[];this.vallist=[];this.lazyChoices={};this.value('',_('Select a base node.'));
+		uci.sections(data[0],'node',n=>{if(n['.name']!==sid && !['selector','urltest','tailscale','wireguard'].includes(n.type)){const label=nodeName(n['.name']);this.value(n['.name'],label);this.lazyChoices[n['.name']]=label;}});
+		return this.super('load',sid);
+	};
 	o.validate=nodeValidation;
 	o.onchange=(ev,sid,id)=>{const target=document.getElementById('hp-base-info-'+sid);if(target)target.textContent=baseInfo(id);const upstream=document.getElementById('hp-original-upstream-'+sid);if(upstream)upstream.textContent=inheritedUpstream(id);};
 	function inheritedUpstream(id,seen=[]){
@@ -551,9 +761,13 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 	o.depends('node_mode','reference');o.modalonly=true;
 	o.description=_('Protocol-specific fields follow the base node. Edit that node to change them; this entry only overrides how it is reached.');
 	o.renderWidget=(sid)=>E('span',{id:'hp-base-info-'+sid},baseInfo(uci.get(data[0],sid,'node_base')));
-	o=s.option(form.ListValue,'local_detour',_('Upstream outbound'),_('Connect to this proxy through the selected outbound. An empty override inherits the original setting; direct connection clears an inherited upstream.'));
+	o=s.option(hp.CBILazyListValue,'local_detour',_('Upstream outbound'),_('Connect to this proxy through the selected outbound. An empty override inherits the original setting; direct connection clears an inherited upstream.'));
 	o.value('',_('Inherit original setting'));o.value('_direct',_('Connect directly'));
-	o.load=function(sid){this.keylist=[];this.vallist=[];this.value('',_('Inherit original setting'));this.value('_direct',_('Connect directly'));uci.sections(data[0],'node',n=>{if(n['.name']!==sid)this.value(n['.name'],nodeName(n['.name']));});return this.super('load',sid);};
+	o.load=function(sid){
+		this.keylist=[];this.vallist=[];this.lazyChoices={};this.value('',_('Inherit original setting'));this.value('_direct',_('Connect directly'));
+		uci.sections(data[0],'node',n=>{if(n['.name']!==sid){const label=nodeName(n['.name']);this.value(n['.name'],label);this.lazyChoices[n['.name']]=label;}});
+		return this.super('load',sid);
+	};
 	o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});o.modalonly=true;o.validate=nodeValidation;o.retain=true;
 	o=s.option(form.DummyValue,'_upstream_original',_('Original upstream'));
 	o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});o.modalonly=true;
@@ -1490,22 +1704,14 @@ return view.extend({
 		let nodeLabels = buildNodeLabels(data[0]);
 
 		/* Cache subscription information, it will be called multiple times */
-		let subinfo = [];
-		for (let suburl of (uci.get(data[0], 'subscription', 'subscription_url') || [])) {
-			const url = new URL(suburl);
-			const urlhash = hp.calcStringMD5(suburl.replace(/#.*$/, ''));
-			const title = url.hash ? decodeURIComponent(url.hash.slice(1)) : url.hostname;
-			let sourceID;uci.sections(data[0],'subscription_source',s=>{if(s.url===suburl.replace(/#.*$/,''))sourceID=s['.name'];});
-			subinfo.push({ 'hash': urlhash, 'title': title, 'id':sourceID });
-		}
-		const subscriptionTitleCounts = {};
-		for (const info of subinfo)
-			subscriptionTitleCounts[info.title] = (subscriptionTitleCounts[info.title] || 0) + 1;
-		for (const info of subinfo)
-			if (subscriptionTitleCounts[info.title] > 1)
-				info.title += ' · ' + (info.id || info.hash).slice(-6);
+		const subinfo = hp.getSubscriptionInfo(data[0]);
 
 		m = new form.Map('homeproxy', _('Edit nodes'));
+		indexMapFieldsDuringDependencyCheck(m);
+		const mapSave = m.save;
+		m.save = function(cb, silent) {
+			return saveNodeMap(this, mapSave, data[0], cb, silent, hp.calcStringMD5.bind(hp));
+		};
 
 		s = m.section(form.NamedSection, 'subscription', 'homeproxy');
 
@@ -1516,11 +1722,7 @@ return view.extend({
 		ss = renderNodeSettings(o.subsection, data, features, main_node, routing_mode, nodeLabels);
 		ss.addremove = true;
 		ss.filter = function(section_id) {
-			for (let info of subinfo)
-				if ((info.hash === uci.get(data[0], section_id, 'grouphash') || info.id && info.id === uci.get(data[0],section_id,'source_id')))
-					return false;
-
-			return true;
+			return !isSubscriptionNode(data[0], section_id, subinfo);
 		}
 		/* Import subscription links start */
 		/* Thanks to luci-app-shadowsocks-libev */
@@ -1615,24 +1817,29 @@ return view.extend({
 
 		/* Subscription nodes start */
 		for (const info of subinfo) {
-			const tab = 'sub_' + info.hash;
-			s.tab(tab, _('Sub (%s)').format(info.title));
-			o = s.taboption(tab, form.Button, '_update_' + info.hash, _('Update nodes from subscriptions'));
-			o.inputstyle = 'apply';
-			o.inputtitle = function() {
-				if (this.map.readonly) { this.readonly = true; return _('Read-only access'); }
-				return _('Update this subscription');
-			};
-			o.onclick = function() {
-				if (this.map.readonly) return;
-				return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions.uc', [info.id || 'src_' + info.hash]).then(() => location.reload()).catch(err => {
-					ui.addNotification(null, E('p', _('An error occurred during updating subscriptions: %s').format(err)));
-				});
-			};
-			o = s.taboption(tab, form.SectionValue, '_sub_' + info.hash, form.GridSection, 'node');
+			const tab = info.id ? 'sub_id_' + info.id : 'sub_hash_' + info.hash;
+			s.tab(tab, (info.configured ? _('Sub (%s)') : _('Removed sub (%s)')).format(info.title));
+			if (info.configured) {
+				o = s.taboption(tab, form.Button, '_update_' + info.hash, _('Update nodes from subscriptions'));
+				o.inputstyle = 'apply';
+				o.inputtitle = function() {
+					if (this.map.readonly) { this.readonly = true; return _('Read-only access'); }
+					return _('Update this subscription');
+				};
+				o.onclick = function() {
+					if (this.map.readonly) return;
+					return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions.uc', [info.id || 'src_' + info.hash]).then(() => location.reload()).catch(err => {
+						ui.addNotification(null, E('p', _('An error occurred during updating subscriptions: %s').format(err)));
+					});
+				};
+			}
+			o = s.taboption(tab, form.SectionValue, '_sub_' + tab, form.GridSection, 'node');
 			ss = renderNodeSettings(o.subsection, data, features, main_node, routing_mode, nodeLabels);
+			ss.addremove = !info.configured;
+			if (!info.configured)
+				ss.renderSectionAdd = () => E('div');
 			ss.filter = function(section_id) {
-				return ((uci.get(data[0], section_id, 'grouphash') === info.hash || info.id && uci.get(data[0],section_id,'source_id') === info.id));
+				return subscriptionMatchesNode(data[0], section_id, info);
 			}
 		}
 		/* Subscription nodes end */
@@ -1657,26 +1864,18 @@ return view.extend({
 
 		o = s.taboption('subscription', form.DynamicList, 'subscription_url', _('Subscription URL-s'),
 			_('Supports sing-box JSON nodes and groups, SIP008, and proxy share-link subscriptions. DNS and routing rules are not imported.'));
-		o.write = function(section, values) {
-			const clean=v=>v.replace(/#.*$/,'');
-			const old=(uci.get(data[0],section,'subscription_url') || []).map(clean), next=(values || []).map(clean);
-			const removed=old.filter(v=>!next.includes(v)),added=next.filter(v=>!old.includes(v));
-			// A single URL replacement retains its source identity (e.g. token rotation).
-			if(removed.length===1 && added.length===1)uci.sections(data[0],'subscription_source',s=>{if(s.url===removed[0])uci.set(data[0],s['.name'],'url',added[0]);});
-			uci.set(data[0],section,'subscription_url',values);
-		};
+		configureSubscriptionURLWrites(o);
 
 		o.validate = function(section_id, value) {
-			if (section_id && value) {
-				try {
-					let url = new URL(value);
-					if (!url.hostname)
-						return _('Expecting: %s').format(_('valid URL'));
-				}
-				catch(e) {
-					return _('Expecting: %s').format(_('valid URL'));
-				}
-			}
+			if (!section_id || !value)
+				return true;
+
+			const values = this.getUIElement(section_id)?.getValue() || [value];
+			const problem = validateSubscriptionURLs(values);
+			if (problem?.code === 'duplicate')
+				return _('Subscription URLs must be unique; changing the fragment does not create a new source.');
+			if (problem)
+				return _('Expecting: %s').format(_('valid HTTP or HTTPS URL'));
 
 			return true;
 		}
@@ -1690,7 +1889,7 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.taboption('subscription', form.DynamicList, 'filter_keywords', _('Filter keywords'),
-			_('Drop/keep nodes that contain the specific keywords. <a target="_blank" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions">Regex</a> is supported.'));
+			_('Drop/keep nodes that contain the specific keywords. Regex is supported.'));
 		o.depends({'filter_nodes': 'disabled', '!reverse': true});
 		o.rmempty = false;
 
@@ -1714,7 +1913,11 @@ return view.extend({
 		o.inputstyle = 'apply';
 		o.inputtitle = _('Save current settings');
 		o.onclick = function() {
-			return this.map.save(null, true).then(() => ui.changes.apply(true)).then(() => location.reload());
+			return this.map.save().then(() => {
+				/* changes.apply() owns the checked-apply confirmation and final
+				 * reload. Reloading here interrupts confirmation and rolls back. */
+				ui.changes.apply(true);
+			}, () => { /* Map.save() already displayed the failure. */ });
 		}
 
 		o = s.taboption('subscription', form.Button, '_update_subscriptions', _('Update nodes from subscriptions'));
@@ -1742,39 +1945,24 @@ return view.extend({
 		o = s.taboption('subscription', form.Button, '_remove_subscriptions', _('Remove all nodes from subscriptions'));
 		o.inputstyle = 'reset';
 		o.inputtitle = function() {
-			if (this.map.readonly) { this.readonly = true; return _('Read-only access'); }
-			let subnodes = [];
-			uci.sections(data[0], 'node', (res) => {
-				if (res.grouphash)
-					subnodes = subnodes.concat(res['.name'])
-			});
-
-			if (subnodes.length > 0) {
-				return _('Remove %s nodes').format(subnodes.length);
-			} else {
-				this.readonly = true;
-				return _('No subscription node');
-			}
+			const subnodes = subscriptionNodeIDs(uci.sections(data[0]));
+			this.readonly = this.map.readonly || !subnodes.length;
+			return this.map.readonly ? _('Read-only access') :
+				subnodes.length ? _('Remove %s nodes').format(subnodes.length) : _('No subscription node');
 		}
 		o.onclick = function() {
 			if (this.map.readonly) return;
-			let subnodes = [];
-			uci.sections(data[0], 'node', (res) => {
-				if (res.grouphash)
-					subnodes = subnodes.concat(res['.name'])
-			});
+			const subnodes = subscriptionNodeIDs(uci.sections(data[0]));
 
 			const references = nodeReferences(uci.sections(data[0]), subnodes);
 			if (references.length) {
 				ui.addNotification(null, E('p', {}, _('These nodes are still referenced. Update these settings before removing them:') + ' ' + references.join('; ')), 'error');
 				return;
 			}
-			for (const id of subnodes) uci.remove(data[0], id);
-
-			this.inputtitle = _('%s nodes removed').format(subnodes.length);
-			this.readonly = true;
-
-			return this.map.save(null, true);
+			return this.map.save(() => {
+				for (const id of subnodes) uci.remove(data[0], id);
+				this.map.subscriptionWritePending = true;
+			});
 		}
 		/* Subscriptions settings end */
 

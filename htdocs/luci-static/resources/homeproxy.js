@@ -12,7 +12,85 @@
 'require uci';
 'require ui';
 
+function getSubscriptionInfo(uciconfig) {
+	const cleanURL = value => String(value || '').replace(/#.*$/, '');
+	const sources = Object.create(null);
+	const sourcesByID = Object.create(null);
+	uci.sections(uciconfig, 'subscription_source', source => {
+		if (source.url) {
+			sources[cleanURL(source.url)] = source['.name'];
+			sourcesByID[source['.name']] = source;
+		}
+	});
+
+	const describe = (raw, id, configured, fallbackHash) => {
+		const clean = cleanURL(raw);
+		let title = clean;
+		try {
+			const url = new URL(raw);
+			title = url.hostname;
+			if (url.hash)
+				try { title = decodeURIComponent(url.hash.slice(1)); } catch (e) { }
+		} catch (e) { }
+		return { hash: fallbackHash || this.calcStringMD5(clean), id, title, configured };
+	};
+
+	const subscriptions = [];
+	const configuredURLs = new Set();
+	for (const raw of uci.get(uciconfig, 'subscription', 'subscription_url') || []) {
+		const clean = cleanURL(raw);
+		/* Old configurations may already contain duplicates. Render one stable
+		 * source tab; the editor validation will require the duplicate to be fixed. */
+		if (configuredURLs.has(clean))
+			continue;
+		configuredURLs.add(clean);
+		subscriptions.push(describe(raw, sources[clean], true));
+	}
+	const activeIDs = new Set(subscriptions.map(info => info.id).filter(Boolean));
+	const activeHashes = new Set(subscriptions.map(info => info.hash));
+	const orphanKeys = new Set();
+
+	/* Removing a URL must not silently reclassify its existing nodes as manual.
+	 * Keep an inactive source entry while any owned nodes remain so the node page
+	 * can show them in a clearly marked, removable subscription table. */
+	uci.sections(uciconfig, 'node', node => {
+		const id = node.source_id;
+		const hash = node.grouphash;
+		if ((!id && !hash) || (id ? activeIDs.has(id) : activeHashes.has(hash)))
+			return;
+
+		const key = id || hash;
+		if (orphanKeys.has(key))
+			return;
+		orphanKeys.add(key);
+
+		const raw = sourcesByID[id]?.url || '';
+		/* An identified source owns its nodes by ID, even if their old group
+		 * hash now belongs to another configured subscription. */
+		const orphanHash = id ? this.calcStringMD5(String(id)) : hash;
+		if (raw) {
+			subscriptions.push(describe(raw, id, false, orphanHash));
+		} else {
+			const suffix = String(key).slice(-6);
+			subscriptions.push({
+				hash: orphanHash, id, title: suffix, configured: false
+			});
+		}
+	});
+
+	/* Titles come from subscription URLs; avoid prototype-key collisions. */
+	const counts = Object.create(null);
+	for (const info of subscriptions)
+		counts[info.title] = (counts[info.title] || 0) + 1;
+	for (const info of subscriptions)
+		if (counts[info.title] > 1)
+			info.title += ' · ' + (info.id || info.hash).slice(-6);
+
+	return subscriptions;
+}
+
 return baseclass.extend({
+	getSubscriptionInfo,
 	dns_strategy: {
 		'': _('Default'),
 		'prefer_ipv4': _('Prefer IPv4'),
@@ -83,6 +161,49 @@ return baseclass.extend({
 			let dl = form.DynamicList.prototype.renderWidget.apply(this, arguments);
 			dl.querySelector('.add-item ul > li[data-value="-"]')?.remove();
 			return dl;
+		}
+	}),
+
+	CBILazyListValue: form.ListValue.extend({
+		__name__: 'CBI.LazyListValue',
+
+		renderWidget(section_id, option_index, cfgvalue) {
+			const deferred = this.lazyChoices || {};
+			const deferredKeys = new Set(Object.keys(deferred));
+			if (!deferredKeys.size)
+				return form.ListValue.prototype.renderWidget.apply(this, arguments);
+
+			const fullKeys = this.keylist, fullValues = this.vallist;
+			const selected = new Set(L.toArray(cfgvalue != null ? cfgvalue : this.default));
+			this.keylist = fullKeys.filter(key => !deferredKeys.has(key) || selected.has(key));
+			this.vallist = this.keylist.map(key => fullValues[fullKeys.indexOf(key)]);
+			const rendered = form.ListValue.prototype.renderWidget.apply(this, arguments);
+			this.keylist = fullKeys;
+			this.vallist = fullValues;
+
+			const select = rendered.matches?.('select') ? rendered : rendered.querySelector?.('select');
+			if (!select)
+				return rendered;
+			const populate = () => {
+				if (select.dataset.lazyChoicesLoaded)
+					return;
+				select.dataset.lazyChoicesLoaded = '1';
+				const existing = new Map(Array.from(select.options, option => [option.value, option]));
+				let next = null;
+				for (let i = fullKeys.length - 1; i >= 0; i--) {
+					const key = fullKeys[i];
+					if (existing.has(key))
+						next = existing.get(key);
+					else if (deferredKeys.has(key)) {
+						const option = E('option', { value: key }, [fullValues[i]]);
+						select.insertBefore(option, next);
+						next = option;
+					}
+				}
+			};
+			select.addEventListener('focus', populate, { once: true });
+			select.addEventListener('pointerdown', populate, { once: true });
+			return rendered;
 		}
 	}),
 
