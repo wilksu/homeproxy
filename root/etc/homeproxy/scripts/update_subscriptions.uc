@@ -20,6 +20,18 @@ import {
 	validation, HP_DIR, RUN_DIR
 } from 'homeproxy';
 
+function uniqueSubscriptionURLs(urls) {
+	const seen = {}, result = [];
+	for (let raw in urls || []) {
+		const clean = replace(raw, /#.*$/, '');
+		if (seen[clean])
+			continue;
+		seen[clean] = true;
+		push(result, raw);
+	}
+	return result;
+}
+
 /* UCI config start */
 const requested_arg = length(ARGV || []) ? ARGV[0] : null;
 if (!getenv('HP_SUBSCRIPTION_STAGED'))
@@ -37,7 +49,7 @@ const allow_insecure = uci.get(uciconfig, ucisubscription, 'allow_insecure') || 
       filter_mode = uci.get(uciconfig, ucisubscription, 'filter_nodes') || 'disabled',
       filter_keywords = uci.get(uciconfig, ucisubscription, 'filter_keywords') || [],
       packet_encoding = uci.get(uciconfig, ucisubscription, 'packet_encoding') || 'xudp',
-      configured_subscription_urls = uci.get(uciconfig, ucisubscription, 'subscription_url') || [],
+      configured_subscription_urls = uniqueSubscriptionURLs(uci.get(uciconfig, ucisubscription, 'subscription_url') || []),
       user_agent = uci.get(uciconfig, ucisubscription, 'user_agent'),
       via_proxy = uci.get(uciconfig, ucisubscription, 'update_via_proxy') || '0';
 const requested_source = getenv('HP_SUBSCRIPTION_SOURCE');

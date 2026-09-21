@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build-api.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:subscription": "node --test tests/node-labels.test.mjs tests/node-references.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

@@ -87,8 +87,13 @@ return view.extend({
 		let features = data[1],
 		    hosts = data[2]?.hosts;
 
-		/* Cache all configured proxy nodes, they will be called multiple times */
-		let proxy_nodes = {};
+		/* Cache source titles and configured proxy nodes once for all selectors. */
+		const sourceByID = Object.create(null), sourceByHash = Object.create(null);
+		for (const source of hp.getSubscriptionInfo(data[0])) {
+			if (source.id) sourceByID[source.id] = source;
+			sourceByHash[source.hash] = source;
+		}
+		let proxy_nodes = Object.create(null);
 		uci.sections(data[0], 'node', (res) => {
 			const isReference=res.node_mode==='reference';
 			let inherited=res, seen=new Set();
@@ -101,19 +106,24 @@ return view.extend({
 				String.format('[%s] %s', isReference ? _('Reference')+' · '+res.type : res.type, res.label || ((stubValidator.apply('ip6addr', nodeaddr) ?
 					String.format('[%s]', nodeaddr) : nodeaddr) + ':' + nodeport));
 			if(res.label && nodeaddr)proxy_nodes[res['.name']]+=' ('+nodeaddr+(nodeport?':'+nodeport:'')+')';
-			if(res.grouphash) {
-				const source=(uci.get(data[0],'subscription','subscription_url') || []).find(url=>hp.calcStringMD5(url.replace(/#.*$/,''))===res.grouphash);
-				if(source){const url=new URL(source);proxy_nodes[res['.name']]+=' — '+(url.hash?decodeURIComponent(url.hash.slice(1)):url.hostname);}
-			}
+			const source = res.source_id ? sourceByID[res.source_id] : sourceByHash[res.grouphash];
+			if (source)
+				proxy_nodes[res['.name']] += ' — ' + (source.configured ? source.title : _('Removed') + ' · ' + source.title);
 
 		});
 		/* Keep common labels readable, but make truly identical choices unique. */
-		const proxy_label_counts = {};
+		const proxy_label_counts = Object.create(null);
 		for (const id in proxy_nodes)
 			proxy_label_counts[proxy_nodes[id]] = (proxy_label_counts[proxy_nodes[id]] || 0) + 1;
 		for (const id in proxy_nodes)
 			if (proxy_label_counts[proxy_nodes[id]] > 1)
 				proxy_nodes[id] += ' · ' + id.slice(-6);
+
+		const addProxyNodeValues = option => {
+			for (const id in proxy_nodes)
+				option.value(id, proxy_nodes[id]);
+			option.lazyChoices = proxy_nodes;
+		};
 
 		m = new form.Map('homeproxy', _('HomeProxy'),
 			_('The modern ImmortalWrt proxy platform for ARM64/AMD64.'));
@@ -150,19 +160,17 @@ return view.extend({
 
 		s.tab('routing', _('Routing Settings'));
 
-		o = s.taboption('routing', form.ListValue, 'main_node', _('Main node'));
+		o = s.taboption('routing', hp.CBILazyListValue, 'main_node', _('Main node'));
 		o.value('nil', _('Disable'));
 		o.value('urltest', _('URLTest'));
-		for (let i in proxy_nodes)
-			o.value(i, proxy_nodes[i]);
+		addProxyNodeValues(o);
 		o.default = 'nil';
 		o.depends({'routing_mode': /^custom$/, '!reverse': true});
 		o.rmempty = false;
 
 		o = s.taboption('routing', hp.CBIStaticList, 'main_urltest_nodes', _('URLTest nodes'),
 			_('List of nodes to test.'));
-		for (let i in proxy_nodes)
-			o.value(i, proxy_nodes[i]);
+		addProxyNodeValues(o);
 		o.depends('main_node', 'urltest');
 		o.rmempty = false;
 
@@ -178,20 +186,18 @@ return view.extend({
 		o.placeholder = '50';
 		o.depends('main_node', 'urltest');
 
-		o = s.taboption('routing', form.ListValue, 'main_udp_node', _('Main UDP node'));
+		o = s.taboption('routing', hp.CBILazyListValue, 'main_udp_node', _('Main UDP node'));
 		o.value('nil', _('Disable'));
 		o.value('same', _('Same as main node'));
 		o.value('urltest', _('URLTest'));
-		for (let i in proxy_nodes)
-			o.value(i, proxy_nodes[i]);
+		addProxyNodeValues(o);
 		o.default = 'nil';
 		o.depends({'routing_mode': /^(?!custom$).+$/, 'proxy_mode': /^((?!redirect$).)+$/});
 		o.rmempty = false;
 
 		o = s.taboption('routing', hp.CBIStaticList, 'main_udp_urltest_nodes', _('URLTest nodes'),
 			_('List of nodes to test.'));
-		for (let i in proxy_nodes)
-			o.value(i, proxy_nodes[i]);
+		addProxyNodeValues(o);
 		o.depends('main_udp_node', 'urltest');
 		o.rmempty = false;
 
@@ -291,10 +297,6 @@ return view.extend({
 		o.value('global', _('Global'));
 		o.default = 'bypass_mainland_china';
 		o.rmempty = false;
-		o.onchange = function(ev, section_id, value) {
-			if (section_id && value === 'custom')
-				this.map.save(null, true);
-		}
 
 		o = s.taboption('routing', form.Value, 'routing_port', _('Routing ports'),
 			_('Specify target ports to be proxied. Multiple ports must be separated by commas.'));
@@ -387,7 +389,7 @@ return view.extend({
 			so.value(i, hp.dns_strategy[i]);
 
 
-		so = s.taboption('routing', form.ListValue, 'default_outbound', _('Default outbound'),
+		so = s.taboption('routing', hp.CBILazyListValue, 'default_outbound', _('Default outbound'),
 			_('Default outbound for connections not matched by any routing rules.'));
 		so.retain = true;
 		so.depends('homeproxy.config.routing_mode', 'custom');
@@ -398,7 +400,7 @@ return view.extend({
 			this.value('nil', _('Disable (the service)'));
 			this.value('direct-out', _('Direct'));
 			this.value('block-out', _('Block'));
-			for (const id in proxy_nodes) this.value(id, proxy_nodes[id]);
+			addProxyNodeValues(this);
 			uci.sections(data[0], 'routing_node', (res) => {
 				if (res.enabled === '1')
 					this.value(res['.name'], res.label);
@@ -559,14 +561,14 @@ return view.extend({
 		so.rmempty = false;
 		so.editable = true;
 
-		so = ss.taboption('field_other', form.ListValue, 'outbound', _('Outbound'),
+		so = ss.taboption('field_other', hp.CBILazyListValue, 'outbound', _('Outbound'),
 			_('Tag of the target outbound.'));
 		so.load = function(section_id) {
 			delete this.keylist;
 			delete this.vallist;
 
 			this.value('direct-out', _('Direct'));
-			for (const id in proxy_nodes) this.value(id, proxy_nodes[id]);
+			addProxyNodeValues(this);
 			uci.sections(data[0], 'routing_node', (res) => {
 				if (res.enabled === '1')
 					this.value(res['.name'], res.label);
@@ -908,14 +910,14 @@ return view.extend({
 		so.depends({'address_resolver': '', '!reverse': true});
 		so.modalonly = true;
 
-		so = ss.option(form.ListValue, 'outbound', _('Outbound'),
+		so = ss.option(hp.CBILazyListValue, 'outbound', _('Outbound'),
 			_('Tag of an outbound for connecting to the dns server.'));
 		so.load = function(section_id) {
 			delete this.keylist;
 			delete this.vallist;
 
 			this.value('direct-out', _('Direct'));
-			for (const id in proxy_nodes) this.value(id, proxy_nodes[id]);
+			addProxyNodeValues(this);
 			uci.sections(data[0], 'routing_node', (res) => {
 				if (res.enabled === '1')
 					this.value(res['.name'], res.label);
@@ -1283,7 +1285,7 @@ return view.extend({
 		so.depends('type', 'remote');
 		so.modalonly = true;
 
-		so = ss.option(form.ListValue, 'outbound', _('Outbound'),
+		so = ss.option(hp.CBILazyListValue, 'outbound', _('Outbound'),
 			_('Tag of the outbound to download rule set.'));
 		so.load = function(section_id) {
 			delete this.keylist;
@@ -1291,7 +1293,7 @@ return view.extend({
 
 			this.value('', _('Default'));
 			this.value('direct-out', _('Direct'));
-			for (const id in proxy_nodes) this.value(id, proxy_nodes[id]);
+			addProxyNodeValues(this);
 			uci.sections(data[0], 'routing_node', (res) => {
 				if (res.enabled === '1')
 					this.value(res['.name'], res.label);

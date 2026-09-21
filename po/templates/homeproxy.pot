@@ -651,9 +651,7 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/homeproxy/node.js:1375
 msgid ""
-"Drop/keep nodes that contain the specific keywords. <a target=\"_blank\" "
-"href=\"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/"
-"Regular_Expressions\">Regex</a> is supported."
+"Drop/keep nodes that contain the specific keywords. Regex is supported."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/homeproxy/node.js:1367
@@ -2275,6 +2273,12 @@ msgstr ""
 msgid "Subscription URL-s"
 msgstr ""
 
+msgid "Subscription URLs must be unique; changing the fragment does not create a new source."
+msgstr ""
+
+msgid "valid HTTP or HTTPS URL"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/homeproxy/node.js:1333
 msgid "Subscriptions"
 msgstr ""
@@ -3497,6 +3501,9 @@ msgstr ""
 msgid "Removed"
 msgstr ""
 
+msgid "Removed sub (%s)"
+msgstr ""
+
 msgid "Changed"
 msgstr ""
 
@@ -4234,4 +4241,11 @@ msgid "Read-only access"
 msgstr ""
 
 msgid "These nodes are still referenced. Update these settings before removing them:"
+msgstr ""
+
+msgid "These nodes are still referenced. Update these settings before removing the subscription:"
+msgstr ""
+
+#: node.js
+msgid "Removing the node failed. The node is still present in the configuration."
 msgstr ""

@@ -664,13 +664,8 @@ msgstr "丢弃请求"
 
 #: htdocs/luci-static/resources/view/homeproxy/node.js:1375
 msgid ""
-"Drop/keep nodes that contain the specific keywords. <a target=\"_blank\" "
-"href=\"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/"
-"Regular_Expressions\">Regex</a> is supported."
-msgstr ""
-"丢弃/保留 包含指定关键词的节点。支持<a target=\"_blank\" href=\"https://"
-"developer.mozilla.org/zh-CN/docs/Web/JavaScript/Guide/Regular_Expressions\">"
-"正则表达式</a>。"
+"Drop/keep nodes that contain the specific keywords. Regex is supported."
+msgstr "丢弃/保留包含指定关键词的节点，支持正则表达式。"
 
 #: htdocs/luci-static/resources/view/homeproxy/node.js:1367
 msgid "Drop/keep specific nodes from subscriptions."
@@ -2317,6 +2312,12 @@ msgstr "订阅（%s）"
 msgid "Subscription URL-s"
 msgstr "订阅地址"
 
+msgid "Subscription URLs must be unique; changing the fragment does not create a new source."
+msgstr "订阅地址不能重复；修改片段名称不会创建新的订阅源。"
+
+msgid "valid HTTP or HTTPS URL"
+msgstr "有效的 HTTP 或 HTTPS 地址"
+
 #: htdocs/luci-static/resources/view/homeproxy/node.js:1333
 msgid "Subscriptions"
 msgstr "订阅"
@@ -3654,6 +3655,9 @@ msgstr "新增"
 msgid "Removed"
 msgstr "移除"
 
+msgid "Removed sub (%s)"
+msgstr "已移除的订阅（%s）"
+
 msgid "Changed"
 msgstr "修改"
 
@@ -4392,3 +4396,10 @@ msgstr "只读访问"
 
 msgid "These nodes are still referenced. Update these settings before removing them:"
 msgstr "这些节点仍被引用，请先处理以下设置再删除："
+
+msgid "These nodes are still referenced. Update these settings before removing the subscription:"
+msgstr "订阅中的节点仍被引用，请先处理以下设置再删除订阅："
+
+#: node.js
+msgid "Removing the node failed. The node is still present in the configuration."
+msgstr "节点删除失败，该节点仍保留在配置中。"

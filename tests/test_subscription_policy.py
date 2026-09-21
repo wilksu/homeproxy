@@ -9,6 +9,39 @@ class ACLTests(unittest.TestCase):
   self.assertIn('exec',acl['write']['file'][path])
   self.assertNotIn('api_control',acl['read']['ubus']['luci.homeproxy'])
 @unittest.skipUnless(UCODE,'UCODE required')
+class SubscriptionURLTests(unittest.TestCase):
+ def test_existing_duplicate_urls_are_fetched_once(self):
+  source=(ROOT/'root/etc/homeproxy/scripts/update_subscriptions.uc').read_text()
+  body=source[source.index('function uniqueSubscriptionURLs'):source.index('\n\n/* UCI config start')]
+  code=body+'''\nprint(sprintf('%J', uniqueSubscriptionURLs([
+    'https://one.test/feed#Primary',
+    'https://one.test/feed#Different title',
+    'https://two.test/feed'
+  ])));'''
+  result=subprocess.run([UCODE,'-e',code],capture_output=True,text=True)
+  self.assertEqual(result.returncode,0,result.stderr)
+  self.assertEqual(json.loads(result.stdout),[
+   'https://one.test/feed#Primary','https://two.test/feed'])
+ def test_filter_modes_keep_and_drop_the_expected_nodes(self):
+  source=(ROOT/'root/etc/homeproxy/scripts/update_subscriptions.uc').read_text()
+  body=source[source.index('function filter_check'):source.index('\n/* String helper end */')]
+  cases=[
+   ('disabled',['Hong Kong'], 'Hong Kong 01',False),
+   ('blacklist',['Hong Kong'], 'Hong Kong 01',True),
+   ('blacklist',['Hong Kong'], 'Singapore 01',False),
+   ('whitelist',['Hong Kong'], 'Hong Kong 01',False),
+   ('whitelist',['Hong Kong'], 'Singapore 01',True),
+  ]
+  for mode,keywords,name,expected in cases:
+   with self.subTest(mode=mode,name=name):
+    code='''const filter_mode=%s,filter_keywords=%s;
+const isEmpty=v=>v===null || v===undefined || v==="" || (type(v)==='array' && !length(v));
+%s
+print(filter_check(%s) ? '1' : '0');'''%(json.dumps(mode),json.dumps(keywords),body,json.dumps(name))
+    result=subprocess.run([UCODE,'-e',code],capture_output=True,text=True)
+    self.assertEqual(result.returncode,0,result.stderr)
+    self.assertEqual(result.stdout,'1' if expected else '0')
+@unittest.skipUnless(UCODE,'UCODE required')
 class RemoteEndpointTests(unittest.TestCase):
  def test_subscription_rejects_local_service_endpoint(self):
   with tempfile.TemporaryDirectory() as tmp:
