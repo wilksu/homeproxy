@@ -40,7 +40,14 @@ class CertificateUploadTests(unittest.TestCase):
   for name,content in [('server_publickey',self.cert*2),('client_ca',self.cert.replace('\n','\r\n')),('server_privatekey',self.key),('server_privatekey',self.rsa),('server_privatekey',self.ec),('client_ech_conf',self.ech)]:
    with self.subTest(name=name,header=content.splitlines()[0]):
     result,saved,mode=self.upload(name,content)
-    self.assertTrue(result['result'],result);self.assertEqual(saved,content.replace('\r\n','\n'));self.assertEqual(mode,0o600)
+    if not result['result']:
+     with tempfile.TemporaryDirectory() as debug:
+      path=pathlib.Path(debug)/'input.pem';path.write_text(content)
+      commands=[['/usr/bin/openssl','version'],['/usr/bin/openssl','x509','-inform','PEM','-in',str(path),'-noout'],['/usr/bin/openssl','pkey','-inform','PEM','-in',str(path),'-passin','pass:','-check','-noout']]
+      script="import {execute} from 'homeproxy_runtime'; print(sprintf('%J',map("+json.dumps(commands)+",cmd=>execute(cmd,5000))));"
+      probe=subprocess.run([UCODE,'-L',str(ROOT/'root/usr/share/ucode/*.uc'),'-L',str(ROOT/'tests/support/*.uc'),'-e',script],capture_output=True,text=True)
+      self.fail(str(result)+'; command diagnostics: '+probe.stdout+' '+probe.stderr)
+    self.assertEqual(saved,content.replace('\r\n','\n'));self.assertEqual(mode,0o600)
 
  def test_invalid_der_and_wrong_types_preserve_old_certificate(self):
   for name,content in [('server_publickey',pem('CERTIFICATE')),('server_publickey','junk -----BEGIN CERTIFICATE----- junk'),('server_publickey',self.cert+pem('CERTIFICATE')),('server_privatekey',pem('PRIVATE KEY')),('server_privatekey',self.cert),('client_ca',self.key),('client_ca',self.der),('client_ech_conf',pem('ECH CONFIGS')),('client_ca',''),('client_ca',b'\x00\xff')]:
