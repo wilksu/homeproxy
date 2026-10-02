@@ -76,8 +76,11 @@ export function installCertificate(name, options) {
    if (!access('/usr/bin/openssl')) die('OpenSSL is unavailable; install openssl-util');
    const args = kind === 'key' ? ['pkey', '-inform', 'PEM', '-in', candidate, '-passin', 'pass:', '-check', '-noout'] :
     ['crl2pkcs7', '-nocrl', '-certfile', candidate, '-out', '/dev/null'];
-   if (!match(content, kind === 'key' ? /-----BEGIN (RSA |EC )?PRIVATE KEY-----/ : /-----BEGIN CERTIFICATE-----/) ||
-       execute(['/usr/bin/openssl', ...args], 5000).code !== 0) die('Invalid ' + kind + ' PEM file');
+   // crl2pkcs7 checks every certificate, but also accepts an empty collection.
+   // x509 additionally requires at least one real certificate.
+   if (execute(['/usr/bin/openssl', ...args], 5000).code !== 0 ||
+       (kind === 'certificate' && execute(['/usr/bin/openssl', 'x509', '-inform', 'PEM', '-in', candidate, '-noout'], 5000).code !== 0))
+    die('Invalid ' + kind + ' PEM file');
   }
   if (!chown(candidate, options?.owner ?? 'sing-box', options?.group ?? 'sing-box') ||
       !rename(candidate, directory + '/' + name + '.pem')) die('Unable to install uploaded file');

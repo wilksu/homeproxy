@@ -18,6 +18,7 @@ class CertificateUploadTests(unittest.TestCase):
   subprocess.run(['openssl','rsa','-in',str(p/'key'),'-traditional','-out',str(p/'rsa')],check=True,capture_output=True)
   subprocess.run(['openssl','ecparam','-name','prime256v1','-genkey','-noout','-out',str(p/'ec')],check=True,capture_output=True)
   cls.cert=(p/'cert').read_text();cls.key=(p/'key').read_text();cls.rsa=(p/'rsa').read_text();cls.ec=(p/'ec').read_text()
+  cls.der=subprocess.check_output(['openssl','x509','-in',str(p/'cert'),'-outform','DER'])
   cls.ech=subprocess.check_output([CORE,'generate','ech-keypair','qa.local'],text=True).split('-----BEGIN ECH KEYS-----')[0].strip()+'\n'
 
  def upload(self,name,content,owner_failure=False,blocked=False):
@@ -42,7 +43,7 @@ class CertificateUploadTests(unittest.TestCase):
     self.assertTrue(result['result'],result);self.assertEqual(saved,content.replace('\r\n','\n'));self.assertEqual(mode,0o600)
 
  def test_invalid_der_and_wrong_types_preserve_old_certificate(self):
-  for name,content in [('server_publickey',pem('CERTIFICATE')),('server_publickey',self.cert+pem('CERTIFICATE')),('server_privatekey',pem('PRIVATE KEY')),('server_privatekey',self.cert),('client_ca',self.key),('client_ech_conf',pem('ECH CONFIGS')),('client_ca',''),('client_ca',b'\x00\xff')]:
+  for name,content in [('server_publickey',pem('CERTIFICATE')),('server_publickey','junk -----BEGIN CERTIFICATE----- junk'),('server_publickey',self.cert+pem('CERTIFICATE')),('server_privatekey',pem('PRIVATE KEY')),('server_privatekey',self.cert),('client_ca',self.key),('client_ca',self.der),('client_ech_conf',pem('ECH CONFIGS')),('client_ca',''),('client_ca',b'\x00\xff')]:
    with self.subTest(name=name,content=content[:40]):
     result,saved,_=self.upload(name,content);self.assertFalse(result['result']);self.assertEqual(saved,self.cert)
 

@@ -4,9 +4,10 @@ from test_generator import ROOT,UCODE
 class ACLTests(unittest.TestCase):
  def test_update_requires_write_access(self):
   acl=json.loads((ROOT/'root/usr/share/rpcd/acl.d/luci-app-homeproxy.json').read_text())['luci-app-homeproxy']
-  path='/etc/homeproxy/scripts/update_subscriptions.uc'
-  self.assertNotIn('exec',acl['read']['file'].get(path,[]))
-  self.assertIn('exec',acl['write']['file'][path])
+  for filename in ['update_subscriptions.uc','update_subscriptions_ui.sh']:
+   path='/etc/homeproxy/scripts/'+filename
+   self.assertNotIn('exec',acl['read']['file'].get(path,[]))
+   self.assertIn('exec',acl['write']['file'][path])
   self.assertNotIn('api_control',acl['read']['ubus']['luci.homeproxy'])
 @unittest.skipUnless(UCODE,'UCODE required')
 class SubscriptionURLTests(unittest.TestCase):

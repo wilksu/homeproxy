@@ -32,6 +32,8 @@ shutil.copytree(src,out/src.name);(out/(src.name+'.args')).write_text(json.dumps
     self.assertFalse(list(main.rglob('*.lmo')))
     self.assertTrue((lang/'usr/lib/lua/luci/i18n/homeproxy.zh-cn.lmo').exists())
     self.assertFalse((lang/'etc/config/homeproxy').exists())
+    self.assertTrue((main/'usr/share/ucode/homeproxy_certificates.uc').is_file())
+    self.assertTrue(os.access(main/'etc/homeproxy/scripts/update_subscriptions_ui.sh',os.X_OK))
     self.assertIn('luci.languages.zh_cn',(lang/'etc/uci-defaults/luci-i18n-homeproxy-zh-cn').read_text())
     self.assertEqual(len(list((repo/'.github').glob('*.'+manager))),2)
     if manager=='apk':
@@ -39,6 +41,9 @@ shutil.copytree(src,out/src.name);(out/(src.name+'.args')).write_text(json.dumps
      self.assertTrue((repo/'.github/luci-i18n-homeproxy-zh-cn-2026.09.12.apk').exists())
      args=json.loads((capture/'luci-app-homeproxy.args').read_text())
      self.assertEqual(args[args.index('--sign-key')+1],str(key))
+     self.assertIn('openssl-util',next(a for a in args if a.startswith('depends:')).split())
     else:
      self.assertTrue((repo/'.github/luci-app-homeproxy_2026.09.12_all.ipk').exists())
      self.assertTrue((repo/'.github/luci-i18n-homeproxy-zh-cn_2026.09.12_all.ipk').exists())
+     self.assertIn('openssl-util',(main/'CONTROL/control').read_text())
+    self.assertIn('+openssl-util',(ROOT/'Makefile').read_text())
