@@ -7,7 +7,7 @@
 
 'use strict';
 
-import { access, error, popen, readfile, writefile } from 'fs';
+import { access, error, lstat, popen, readfile, writefile } from 'fs';
 import { runtime, diagnose, apiSecret } from 'homeproxy_runtime';
 import { installCertificate } from 'homeproxy_certificates';
 
