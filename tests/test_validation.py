@@ -24,7 +24,7 @@ class ValidationTests(unittest.TestCase):
    core.chmod(0o700)
    script = tmp / 'validate.uc'
    script.write_text((ROOT / 'root/etc/homeproxy/scripts/validate.uc').read_text().replace('/usr/bin/sing-box', str(core)).replace('/usr/share/homeproxy/compat.json', str(ROOT / 'root/usr/share/homeproxy/compat.json')))
-   (tmp / 'homeproxy.uc').write_text("export function shellQuote(s) { return \"'\" + replace(s, \"'\", \"'\\\\''\") + \"'\"; }")
+   (tmp / 'homeproxy.uc').write_text("export function shellQuote(s) { return \"'\" + replace(s, \"'\", \"'\\\\''\") + \"'\"; };")
    files = []
    for i, config in enumerate(configs):
     f = tmp / f'{i}.json'; f.write_text(json.dumps(config)); files.append(str(f))

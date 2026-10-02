@@ -24,8 +24,8 @@ function get_mk_value() {
 
 PKG_NAME="$(get_mk_value "PKG_NAME")"
 CORE_PACKAGE_VERSION="$(python3 "$PKG_DIR/scripts/pairing.py" core_package_version)"
-APK_DEPENDS="libc sing-box=$CORE_PACKAGE_VERSION curl bind-dig firewall4 kmod-nft-tproxy ucode-mod-digest"
-IPK_DEPENDS="libc, sing-box (= $CORE_PACKAGE_VERSION), curl, bind-dig, firewall4, kmod-nft-tproxy, ucode-mod-digest"
+APK_DEPENDS="libc sing-box=$CORE_PACKAGE_VERSION curl openssl-util bind-dig firewall4 kmod-nft-tproxy ucode-mod-digest"
+IPK_DEPENDS="libc, sing-box (= $CORE_PACKAGE_VERSION), curl, openssl-util, bind-dig, firewall4, kmod-nft-tproxy, ucode-mod-digest"
 if [ -n "$LANGUAGE" ]; then
  [ -f "$PKG_DIR/po/$LANGUAGE/homeproxy.po" ] || exit 1
  LANGUAGE_CODE="${LANGUAGE//_/-}"

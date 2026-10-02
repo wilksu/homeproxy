@@ -37,6 +37,9 @@
 				],
 				"/etc/homeproxy/scripts/update_subscriptions.uc": [
 					"exec"
+				],
+				"/etc/homeproxy/scripts/update_subscriptions_ui.sh": [
+					"exec"
 				]
 			},
 			"uci": [

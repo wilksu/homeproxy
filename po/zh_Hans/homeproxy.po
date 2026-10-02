@@ -4403,3 +4403,9 @@ msgstr "订阅中的节点仍被引用，请先处理以下设置再删除订阅
 #: node.js
 msgid "Removing the node failed. The node is still present in the configuration."
 msgstr "节点删除失败，该节点仍保留在配置中。"
+
+msgid "Paste one proxy share link per line. Duplicate lines are ignored. For sing-box JSON or SIP008, use a subscription URL."
+msgstr "每行粘贴一个代理分享链接，重复行会被忽略。sing-box JSON 或 SIP008 请通过订阅 URL 导入。"
+
+msgid "Subscription update failed. Check the HomeProxy log for details."
+msgstr "订阅更新失败，请查看 HomeProxy 日志了解详情。"

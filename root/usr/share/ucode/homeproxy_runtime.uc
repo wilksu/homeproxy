@@ -4,7 +4,7 @@ import { cursor } from 'uci';
 import { connect } from 'ubus';
 
 function quote(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
-function execute(args, timeout) {
+export function execute(args, timeout) {
  const out = mkstemp(), err = mkstemp();
  const code = system(join(' ', map(args, quote)) + ' >&' + out.fileno() + ' 2>&' + err.fileno(), timeout || 6500);
  out.seek(0); err.seek(0);

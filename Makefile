@@ -10,6 +10,7 @@ LUCI_PKGARCH:=all
 LUCI_DEPENDS:= \
 	+sing-box \
 	+curl \
+	+openssl-util \
 	+bind-dig \
 	+firewall4 \
 	+kmod-nft-tproxy \
