@@ -9,6 +9,7 @@
 
 import { access, error, lstat, popen, readfile, writefile } from 'fs';
 import { runtime, diagnose, apiSecret } from 'homeproxy_runtime';
+import { installCertificate } from 'homeproxy_certificates';
 
 /* Kanged from ucode/luci */
 function shellquote(s) {
@@ -64,67 +65,7 @@ const methods = {
 
 	certificate_write: {
 		args: { filename: 'filename' },
-		call: function(req) {
-			const writeCertificate = (filename, priv) => {
-				const tmpcert = '/tmp/homeproxy_certificate.tmp';
-				const filestat = lstat(tmpcert);
-
-				if (!filestat || filestat.type !== 'file' || filestat.size <= 0) {
-					system(`rm -f ${tmpcert}`);
-					return { result: false, error: 'empty certificate file' };
-				}
-
-				let filecontent = readfile(tmpcert);
-				if (is_binary(filecontent)) {
-					system(`rm -f ${tmpcert}`);
-					return { result: false, error: 'illegal file type: binary' };
-				}
-
-				/* Kanged from luci-proto-openconnect */
-				const beg = priv ? /^-----BEGIN (RSA|EC) PRIVATE KEY-----$/ : /^-----BEGIN CERTIFICATE-----$/,
-				      end = priv ? /^-----END (RSA|EC) PRIVATE KEY-----$/ : /^-----END CERTIFICATE-----$/,
-				      lines = split(trim(filecontent), /[\r\n]/);
-				let start = false, i;
-
-				for (i = 0; i < length(lines); i++) {
-					if (match(lines[i], beg))
-						start = true;
-					else if (start && !b64dec(lines[i]) && length(lines[i]) !== 64)
-						break;
-				}
-
-				if (!start || i < length(lines) - 1 || !match(lines[i], end)) {
-					system(`rm -f ${tmpcert}`);
-					return { result: false, error: 'this does not look like a correct PEM file' };
-				}
-
-				/* Sanitize certificate */
-				filecontent = trim(filecontent);
-				filecontent = replace(filecontent, /\r\n?/g, '\n');
-				if (!match(filecontent, /\n$/))
-					filecontent += '\n';
-
-				system(`mkdir -p ${HP_DIR}/certs`);
-				writefile(`${HP_DIR}/certs/${filename}.pem`, filecontent);
-				system(`rm -f ${tmpcert}`);
-
-				return { result: true };
-			};
-
-			const filename = req.args?.filename;
-			switch (filename) {
-			case 'client_ca':
-			case 'server_publickey':
-				return writeCertificate(filename, false);
-				break;
-			case 'server_privatekey':
-				return writeCertificate(filename, true);
-				break;
-			default:
-				return { result: false, error: 'illegal cerificate filename' };
-				break;
-			}
-		}
+		call: (req) => installCertificate(req.args?.filename)
 	},
 
 	connection_check: {
@@ -169,7 +110,8 @@ const methods = {
 			const type = req.args?.type;
 			let result = {};
 
-			const fd = popen(`/usr/bin/sing-box generate ${type} ${shellquote(req.args?.params || '')}`);
+			const params = req.args?.params || '';
+			const fd = popen(`/usr/bin/sing-box generate ${type}${params ? ' ' + shellquote(params) : ''}`);
 			if (fd) {
 				let ech_cfg_set = false;
 				let ech_key_set = false;
@@ -202,9 +144,13 @@ const methods = {
 					}
 				}
 
-				fd.close();
+				if (fd.close() !== 0)
+					return { result: false, error: 'sing-box key generation failed' };
 			}
-
+			if ((type === 'uuid' && !result.uuid) ||
+			    (type === 'ech-keypair' && (!result.ech_cfg || !result.ech_key)) ||
+			    (type in ['reality-keypair', 'vapid-keypair', 'wg-keypair'] && (!result.private_key || !result.public_key)))
+				return { result: false, error: 'sing-box returned no complete key pair' };
 			return { result };
 		}
 	},

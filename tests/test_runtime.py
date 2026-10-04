@@ -28,3 +28,7 @@ class RuntimeTests(unittest.TestCase):
  def test_command_output_and_timeout(self):
   self.assertEqual(self.probe("execute(['/bin/echo', 'hello'], 1000)"), {'code': 0, 'stdout': 'hello\n', 'stderr': ''})
   self.assertNotEqual(self.probe("execute(['/bin/sleep', '2'], 50)")['code'], 0)
+
+ def test_command_with_many_open_descriptors(self):
+  result = self.probe("(function() { const held = map([0,1,2,3,4,5,6,7,8,9,10,11], () => mkstemp()); const result = execute(['/bin/sh', '-c', 'printf output; printf error >&2; exit 17'], 1000); for (let file in held) file.close(); return result; })()")
+  self.assertEqual(result, {'code': 17, 'stdout': 'output', 'stderr': 'error'})

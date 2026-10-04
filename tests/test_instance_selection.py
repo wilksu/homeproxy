@@ -46,7 +46,7 @@ ucode() {
   for client,server in [('1','0'),('0','1'),('0','0'),('1','1'),('unset','unset')]:
    with self.subTest(client=client,server=server),tempfile.TemporaryDirectory() as tmp:
     p=pathlib.Path(tmp)
-    (p/'homeproxy.uc').write_text("export const RUN_DIR="+json.dumps(tmp)+"; export function isEmpty(v) { return !length(v); }")
+    (p/'homeproxy.uc').write_text("export const RUN_DIR="+json.dumps(tmp)+"; export function isEmpty(v) { return !length(v); };")
     cfg={'config':{'.type':'homeproxy','routing_mode':'custom','proxy_mode':'tun'},'routing':{'.type':'homeproxy','default_outbound':'node'},'server':{'.type':'homeproxy','enabled':'1'},'listener':{'.type':'server','enabled':'1','firewall':'1','port':'16666'}}
     (p/'uci.json').write_text(json.dumps(cfg))
     for name in ['input','forward']:(p/f'fw4_{name}.nft').write_text('stale')

@@ -14,6 +14,13 @@
 'require homeproxy as hp';
 'require tools.widgets as widgets';
 
+function runSubscriptionUpdate(source) {
+ return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions_ui.sh', source ? [source] : [], 'json').then(result => {
+  if (result?.code !== 0)
+   throw new Error(_('Subscription update failed. Check the HomeProxy log for details.'));
+ });
+}
+
 // Shared by individual deletion and subscription bulk removal.
 function nodeReferences(sections, deleted) {
  const removing = new Set(deleted);
@@ -1729,7 +1736,7 @@ return view.extend({
 		ss.handleLinkImport = function() {
 			let textarea = new ui.Textarea();
 			ui.showModal(_('Import share links'), [
-				E('p', _('Supports sing-box JSON nodes and groups, SIP008, and proxy share-link subscriptions. DNS and routing rules are not imported.')),
+				E('p', _('Paste one proxy share link per line. Duplicate lines are ignored. For sing-box JSON or SIP008, use a subscription URL.')),
 				textarea.render(),
 				E('div', { class: 'right' }, [
 					E('button', {
@@ -1828,7 +1835,7 @@ return view.extend({
 				};
 				o.onclick = function() {
 					if (this.map.readonly) return;
-					return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions.uc', [info.id || 'src_' + info.hash]).then(() => location.reload()).catch(err => {
+					return runSubscriptionUpdate(info.id || 'src_' + info.hash).then(() => location.reload()).catch(err => {
 						ui.addNotification(null, E('p', _('An error occurred during updating subscriptions: %s').format(err)));
 					});
 				};
@@ -1934,7 +1941,7 @@ return view.extend({
 		}
 		o.onclick = function() {
 			if (this.map.readonly) return;
-			return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions.uc').then((res) => {
+			return runSubscriptionUpdate().then(() => {
 				return location.reload();
 			}).catch((err) => {
 				ui.addNotification(null, E('p', _('An error occurred during updating subscriptions: %s').format(err)));

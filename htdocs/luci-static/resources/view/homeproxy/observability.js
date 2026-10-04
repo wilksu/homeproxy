@@ -304,18 +304,19 @@ return view.extend({
      toolBusy = true; outbound.disabled = true;
      start.disabled = true; cancel.disabled = false; input.disabled = true;
      state.textContent = _('Running…'); setContent(result, []);
-     let final = false;
+     let final = false, elapsedMs = 0;
      try {
       for await (const item of client.stream(method, { ...request(), outboundTag: outbound.value }, controller.signal)) {
        if (item.error) throw new Error(item.error);
        final = !!item.isFinal;
+       elapsedMs = Math.max(elapsedMs, Number(item.elapsedMs) || 0);
        const nat = value => ({ 2: _('Endpoint independent'), 3: _('Address dependent'), 4: _('Address and port dependent') })[value] || _('Unknown');
        const filtering = value => ({ 1: _('Endpoint independent'), 2: _('Address dependent'), 3: _('Address and port dependent') })[value] || _('Unknown');
        const entries = method === 'StartSTUNTest' ? [
         [_('External address'), item.externalAddr || '—'], [_('Latency'), item.latencyMs + ' ms'],
         [_('NAT mapping'), item.natTypeSupported ? nat(item.natMapping) : item.isFinal ? _('Server does not support NAT classification') : _('Running…')],
         [_('NAT filtering'), item.natTypeSupported ? filtering(item.natFiltering) : item.isFinal ? _('Server does not support NAT classification') : _('Running…')]
-       ] : [[_('Elapsed'), (Number(item.elapsedMs) / 1000).toFixed(1) + ' s'], [_('Idle latency'), item.idleLatencyMs + ' ms'],
+       ] : [[_('Elapsed'), (elapsedMs / 1000).toFixed(1) + ' s'], [_('Idle latency'), item.idleLatencyMs + ' ms'],
         [_('Download capacity'), (Number(item.downloadCapacity) / 1000000).toFixed(2) + ' Mbps'],
         [_('Upload capacity'), (Number(item.uploadCapacity) / 1000000).toFixed(2) + ' Mbps'],
         [_('Download responsiveness'), item.downloadRPM + ' RPM'], [_('Upload responsiveness'), item.uploadRPM + ' RPM']];

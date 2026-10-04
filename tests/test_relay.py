@@ -26,8 +26,8 @@ class RelayTests(unittest.TestCase):
      except OSError:time.sleep(.02)
     worker=p/'api-stream.sh';worker.write_text((ROOT/'root/etc/homeproxy/scripts/api-stream.sh').read_text().replace('/tmp/homeproxy-api-streams',str(p/'jobs')))
     relay=p/'relay.uc';relay.write_text((ROOT/'root/www/cgi-bin/homeproxy-api').read_text().replace('/var/run/homeproxy',str(p)).replace('/tmp/homeproxy-api-streams',str(p/'jobs')).replace('/etc/homeproxy/scripts/api-stream.sh',str(worker)))
-    (p/'ubus.uc').write_text("export function connect() { return { call: (object, method, args) => ({ access: args.function === 'api_read' }) }; }")
-    (p/'uci.uc').write_text("export function cursor() { return { get: () => "+ ('"router.test"' if dns else 'null') +" }; }")
+    (p/'ubus.uc').write_text("export function connect() { return { call: (object, method, args) => ({ access: args.function === 'api_read' }) }; };")
+    (p/'uci.uc').write_text("export function cursor() { return { get: () => "+ ('"router.test"' if dns else 'null') +" }; };")
     env={**os.environ,'PATH_INFO':'/client/GetVersion','REQUEST_METHOD':'POST','CONTENT_TYPE':'application/grpc-web+proto','CONTENT_LENGTH':'5','HTTP_HOST':'router.test','HTTP_ORIGIN':'http://router.test'}
     def request(changes=None):
      return subprocess.run([UCODE,'-L',str(p/'*.uc'),str(relay)],input=b'\x00'*5,capture_output=True,env={**env,**(changes or {})},timeout=8)
@@ -49,6 +49,6 @@ class RelayTests(unittest.TestCase):
     denied=request({**auth,'PATH_INFO':'/client/SubscribeLog'});self.assertIn(b'429 Too Many Requests',denied.stdout)
     for d in jobs.glob('job.limit*'):shutil.rmtree(d)
     # A revoked session cannot read an already-owned job.
-    (p/'ubus.uc').write_text("export function connect() { return { call: () => ({ access: false }) }; }")
+    (p/'ubus.uc').write_text("export function connect() { return { call: () => ({ access: false }) }; };")
     denied=request({**auth,'QUERY_STRING':'start'});self.assertIn(b'403 Forbidden',denied.stdout)
    finally:core.terminate();core.wait(timeout=5)

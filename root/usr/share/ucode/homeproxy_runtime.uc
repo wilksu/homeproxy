@@ -4,9 +4,10 @@ import { cursor } from 'uci';
 import { connect } from 'ubus';
 
 function quote(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
-function execute(args, timeout) {
+export function execute(args, timeout) {
  const out = mkstemp(), err = mkstemp();
- const code = system(join(' ', map(args, quote)) + ' >&' + out.fileno() + ' 2>&' + err.fileno(), timeout || 6500);
+ // dash only accepts single-digit descriptor duplication; rpcd may hold more.
+ const code = system(join(' ', map(args, quote)) + ' >/proc/self/fd/' + out.fileno() + ' 2>/proc/self/fd/' + err.fileno(), timeout || 6500);
  out.seek(0); err.seek(0);
  const result = { code, stdout: out.read(16384) || '', stderr: err.read(4096) || '' };
  out.close(); err.close();

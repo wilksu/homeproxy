@@ -12,4 +12,4 @@ export function cursor() {
   changes: () => ({ homeproxy: true }),
   commit: () => { if (getenv('HP_TEST_UCI_SAVE')) writefile(getenv('HP_TEST_UCI_SAVE'), sprintf('%J', sections)); return true; }
  };
-}
+};

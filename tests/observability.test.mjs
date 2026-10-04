@@ -18,6 +18,7 @@ class Element {
  set textContent(value) { this.children = [value]; }
  get firstChild() { return this.children[0]; }
  click() { return this.attrs.click?.(); }
+ reportValidity() { return true; }
 }
 const E = (tag, attrs, children) => new Element(tag, attrs, children);
 function walk(node) { return node instanceof Element ? [node, ...node.children.flatMap(walk)] : []; }
@@ -27,6 +28,10 @@ function fixture(overrides = {}) {
  const streams = [], controls = [], stages = [], listeners = {}, exports = [], timers = [];
  class Client {
   async *stream(method,request,signal) {
+   if (method === 'StartNetworkQualityTest' && overrides.qualityMessages) {
+    for (const message of overrides.qualityMessages) yield message;
+    return;
+   }
    let resolve;const promise=new Promise(r=>resolve=r);const item={method,stopped:false,callback:data=>resolve(data)};streams.push(item);
    signal?.addEventListener('abort',()=>{item.stopped=true;resolve(null);});
    try { const data=await promise;if(data)yield data; }finally{item.stopped=true;}
@@ -189,4 +194,15 @@ test('URLTest refreshes late results after the core timeout and cancels on leave
  late.fn();await settle();f.streams.at(-1).callback({group:[{...group,items:[{tag:'n',urlTestDelay:15000}]}]});await settle();
  assert.match(f.root.textContent,/15000 ms/);
  await f.button('Logs').click();assert.equal(late.cancelled,true);
+});
+
+test('network quality keeps elapsed progress when the final summary omits it and resets on rerun', async () => {
+ const messages = [{elapsedMs:'16500',isFinal:false},{elapsedMs:'0',isFinal:true}];
+ const f = fixture({qualityMessages:messages}); await settle(); await f.button('Tools').click();
+ const card = walk(f.root).find(n => n.tag === 'section' && n.children.some(c => c.tag === 'h4' && c.textContent === 'Network quality'));
+ const start = walk(card).find(n => n.tag === 'button' && n.textContent === 'Start');
+ await start.click();
+ assert.match(card.textContent,/Completed/); assert.match(card.textContent,/Elapsed16.5 s/);
+ messages.splice(0,messages.length,{elapsedMs:'5000',isFinal:false},{elapsedMs:'0',isFinal:true});
+ await start.click(); assert.match(card.textContent,/Elapsed5.0 s/);
 });
