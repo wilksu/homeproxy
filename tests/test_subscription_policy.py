@@ -30,8 +30,10 @@ class SubscriptionURLTests(unittest.TestCase):
    ('disabled',['Hong Kong'], 'Hong Kong 01',False),
    ('blacklist',['Hong Kong'], 'Hong Kong 01',True),
    ('blacklist',['Hong Kong'], 'Singapore 01',False),
+   ('blacklist',[], 'Hong Kong 01',False),
    ('whitelist',['Hong Kong'], 'Hong Kong 01',False),
    ('whitelist',['Hong Kong'], 'Singapore 01',True),
+   ('whitelist',[], 'Singapore 01',False),
   ]
   for mode,keywords,name,expected in cases:
    with self.subTest(mode=mode,name=name):

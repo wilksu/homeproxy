@@ -130,7 +130,10 @@ function applySubscriptionURLChange(uciConfig, section_id, values, calcHash) {
 		uci.remove(uciConfig, id);
 	for (const id of removedSources)
 		uci.remove(uciConfig, id);
-	uci.set(uciConfig, section_id, 'subscription_url', nextValues);
+	if (nextValues.length)
+		uci.set(uciConfig, section_id, 'subscription_url', nextValues);
+	else
+		uci.unset(uciConfig, section_id, 'subscription_url');
 	return { changed: true, replaced: false, removedNodes, removedSources, references: [] };
 }
 
@@ -1898,7 +1901,6 @@ return view.extend({
 		o = s.taboption('subscription', form.DynamicList, 'filter_keywords', _('Filter keywords'),
 			_('Drop/keep nodes that contain the specific keywords. Regex is supported.'));
 		o.depends({'filter_nodes': 'disabled', '!reverse': true});
-		o.rmempty = false;
 
 		o = s.taboption('subscription', form.Value, 'user_agent', _('User-Agent'));
 		o.placeholder = 'Wget/1.21 (HomeProxy, like v2rayN)';
