@@ -130,7 +130,8 @@ export function parseValue(option, section_id) {
 	const cval = option.cfgvalue(section_id);
 	const fval = option.formvalue(section_id);
 
-	if (fval == null || fval === '' ||
+	/* LuCI deliberately treats an empty DynamicList array like an empty string. */
+	if (fval == null || fval == '' ||
 	    (fval === option.default && (option.optional || option.rmempty))) {
 		if (option.rmempty || option.optional)
 			return { writes: [], removed: [option.option] };
