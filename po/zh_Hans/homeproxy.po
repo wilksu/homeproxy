@@ -4409,3 +4409,6 @@ msgstr "每行粘贴一个代理分享链接，重复行会被忽略。sing-box 
 
 msgid "Subscription update failed. Check the HomeProxy log for details."
 msgstr "订阅更新失败，请查看 HomeProxy 日志了解详情。"
+
+msgid "Host header"
+msgstr "Host 请求头"

@@ -6,14 +6,32 @@ const scalar={server:'address',server_port:'port',username:'username',password:'
 const times={idle_session_check_interval:'anytls_idle_session_check_interval',idle_session_timeout:'anytls_idle_session_timeout',hop_interval:'hysteria_hop_interval',hop_interval_max:'hysteria_hop_interval_max',heartbeat:'tuic_heartbeat'};
 const tls={enabled:'tls',server_name:'tls_sni',insecure:'tls_insecure',alpn:'tls_alpn',min_version:'tls_min_version',max_version:'tls_max_version',cipher_suites:'tls_cipher_suites',certificate_path:'tls_cert_path',certificate_public_key_sha256:'tls_certificate_public_key_sha256'};
 const supported=['anytls','http','hysteria','hysteria2','shadowsocks','shadowtls','socks','ssh','trojan','tuic','vless','vmess','direct','selector','urltest'];
-function value(v) { if(type(v)==='bool')return v?'1':'0'; if(type(v)==='array')return map(v,x=>''+x); return ''+v; }
+const listFields=['hysteria_hopping_port','ssh_host_key','ssh_host_key_algo','ssh_priv_key','tls_alpn','tls_cipher_suites','tls_certificate_public_key_sha256','tls_ech_config','http_host','ws_host'];
+// JSON null means unset. UCI lists must be nonempty lists of strings.
+function fieldKeys(object) { return filter(keys(object || {}), key=>object[key]!==null); }
+function value(v) {
+ if(v===null)return null;
+ if(type(v)==='bool')return v?'1':'0';
+ if(type(v)==='array'){
+  if(length(filter(v,x=>type(x)!=='string')))die('Node list fields must contain strings');
+  return length(v) ? v : null;
+ }
+ if(!(type(v) in ['string','int','double']))die('Node scalar fields must contain scalar values');
+ return ''+v;
+}
+function network(v) {
+ const protocols=type(v)==='array' ? v : [v];
+ if(length(filter(protocols,p=>!(p in ['tcp','udp']))))die('Invalid Shadowsocks network; expected tcp or udp');
+ const tcp='tcp' in protocols, udp='udp' in protocols;
+ return tcp===udp ? null : tcp ? 'tcp' : 'udp';
+}
 function seconds(v) {
  if(type(v)==='int' || type(v)==='double')return ''+v;
  const m=match(v || '',/^([0-9]+)(ms|s|m|h)$/);if(!m)die('Unsupported duration; use an integral duration in seconds, minutes or hours');
  const n=int(m[1])*(m[2]==='h'?3600:m[2]==='m'?60:1);if(m[2]==='ms'){if(n%1000)die('Subsecond duration is not supported by this node field');return ''+(n/1000);}return ''+n;
 }
 function fields(target, source, mapping, label) {
- for(let key in keys(source || {})){if(!mapping[key])die(label+'.'+key+': field is not supported by the node form yet');target[mapping[key]]=value(source[key]);}
+ for(let key in fieldKeys(source)){if(!mapping[key])die(label+'.'+key+': field is not supported by the node form yet');target[mapping[key]]=value(source[key]);}
 }
 export function nodeID(source, key) { return 'n'+md5(source+'\n'+key); };
 export function subscriptionDocument(content) {
@@ -26,7 +44,7 @@ export function importNode(input, resolve) {
  if (input.type === 'tailscale') die('Tailscale endpoints must be configured locally; subscriptions cannot manage router services');
  const n={type:input.type,label:input.tag,source_tag:input.tag};
  if(!(input.type in supported))die('Unsupported node type: '+input.type);
- for(let key in keys(input)) {
+ for(let key in fieldKeys(input)) {
   const v=input[key];if(key in ['type','tag'])continue;
   if(key==='outbounds'){n.group_nodes=map(v,t=>resolve(t));continue;}
   if(key==='default'){n.group_default=resolve(v);continue;}
@@ -34,7 +52,7 @@ export function importNode(input, resolve) {
   if(key==='detour'){n.node_detour=resolve(v);continue;}
   if(key==='domain_resolver')die('Outbound '+input.tag+' has a DNS resolver dependency; select a local resolver before importing nodes only');
   if(key==='bind_interface' || key==='routing_mark'){n['node_'+key]=value(v);continue;}
-  if(key==='network' && input.type==='shadowsocks'){n.shadowsocks_network=value(v);continue;}
+  if(key==='network' && input.type==='shadowsocks'){n.shadowsocks_network=network(v);continue;}
   if(scalar[key]){n[scalar[key]]=value(v);continue;}
   if(times[key]){n[times[key]]=seconds(v);continue;}
   if(key==='min_idle_session'){n.anytls_min_idle_session=value(v);continue;}
@@ -48,31 +66,53 @@ export function importNode(input, resolve) {
    if(type(v)==='bool')n.udp_over_tcp=value(v);else fields(n,v,{enabled:'udp_over_tcp',version:'udp_over_tcp_version'},'udp_over_tcp');continue;
   }
   if(key==='tls'){
-   for(let t in keys(v)){
+   for(let t in fieldKeys(v)){
     if(tls[t])n[tls[t]]=value(v[t]);
     else if(t==='handshake_timeout')n.tls_handshake_timeout=seconds(v[t]);
-    else if(t==='utls'){if(v[t].enabled!==false)n.tls_utls=v[t].fingerprint || 'chrome';for(let k in keys(v[t]))if(!(k in ['enabled','fingerprint']))die('Unsupported TLS uTLS field: '+k);}
+    else if(t==='utls'){
+     if(v[t].enabled===true){
+      const fingerprint=v[t].fingerprint || 'chrome';
+      // The paired 1.14 core resolves these compatibility names to Chrome.
+      n.tls_utls=fingerprint in ['chrome_psk','chrome_psk_shuffle','chrome_padding_psk_shuffle','chrome_pq','chrome_pq_psk'] ? 'chrome' : fingerprint;
+     }
+     for(let k in fieldKeys(v[t]))if(!(k in ['enabled','fingerprint']))die('Unsupported TLS uTLS field: '+k);
+    }
     else if(t==='reality')fields(n,v[t],{enabled:'tls_reality',public_key:'tls_reality_public_key',short_id:'tls_reality_short_id'},'tls.reality');
     else if(t==='ech')fields(n,v[t],{enabled:'tls_ech',config:'tls_ech_config',config_path:'tls_ech_config_path'},'tls.ech');
     else die('Unsupported TLS field: '+t);
    }continue;
   }
   if(key==='multiplex'){
-   for(let k in keys(v)) {
+   for(let k in fieldKeys(v)) {
     if(k==='brutal')fields(n,v[k],{enabled:'multiplex_brutal',up_mbps:'multiplex_brutal_up',down_mbps:'multiplex_brutal_down'},'multiplex.brutal');
     else fields(n,{[k]:v[k]},{enabled:'multiplex',protocol:'multiplex_protocol',max_connections:'multiplex_max_connections',min_streams:'multiplex_min_streams',max_streams:'multiplex_max_streams',padding:'multiplex_padding'},'multiplex');
    }continue;
   }
   if(key==='transport'){
    n.transport=v.type;
-   for(let k in keys(v)){
+   for(let k in fieldKeys(v)){
     if(k==='type')continue;
-    if(k==='headers'){if(length(keys(v[k]))!==1 || !v[k].Host)die('Transport headers other than Host need a supported form field');n.ws_host=v[k].Host;continue;}
+    if(k==='headers'){
+     const names=fieldKeys(v[k]);if(!length(names))continue;
+     if(length(names)!==1 || lc(names[0])!=='host')die('Transport headers other than Host need a supported form field');
+     n.ws_host=value(v[k][names[0]]);continue;
+    }
     const mapping={host:v.type==='httpupgrade'?'httpupgrade_host':'http_host',path:v.type==='ws'?'ws_path':'http_path',method:'http_method',max_early_data:'websocket_early_data',early_data_header_name:'websocket_early_data_header',service_name:'grpc_servicename',permit_without_stream:'grpc_permit_without_stream'};
     if(k in ['idle_timeout','ping_timeout'])n['http_'+k]=seconds(v[k]);else fields(n,{[k]:v[k]},mapping,'transport');
    }continue;
   }
   die(input.type+'.'+key+': field is not supported by the node form yet');
+ }
+ // Preserve native defaults when the editor has a different default for new nodes.
+ if(input.type==='vmess' && !n.vmess_global_padding)n.vmess_global_padding='0';
+ for(let key in keys(n)){
+  if(n[key]===null){delete n[key];continue;}
+  if(key in listFields){
+   const items=type(n[key])==='array' ? n[key] : [n[key]];
+   if(length(filter(items,item=>type(item)!=='string' || item==='')))
+    die(key+': empty or non-string list entries cannot be preserved by the node editor');
+   n[key]=items;
+  }
  }
  return n;
 };

@@ -210,7 +210,7 @@ function generate_endpoint(node) {
 		routing_mark: strToInt(self_mark),
 		tcp_fast_open: strToBool(node.tcp_fast_open),
 		tcp_multi_path: strToBool(node.tcp_multi_path),
-		udp_fragment: strToBool(node.udp_fragment)
+		udp_fragment: node.udp_fragment === '0' ? false : strToBool(node.udp_fragment)
 	};
 
 	return endpoint;
@@ -358,7 +358,7 @@ function generate_outbound(node) {
 		} : null,
 		tcp_fast_open: strToBool(node.tcp_fast_open),
 		tcp_multi_path: strToBool(node.tcp_multi_path),
-		udp_fragment: strToBool(node.udp_fragment)
+		udp_fragment: node.udp_fragment === '0' ? false : strToBool(node.udp_fragment)
 	};
 
 	return outbound;

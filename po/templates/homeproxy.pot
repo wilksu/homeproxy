@@ -4249,3 +4249,6 @@ msgstr ""
 #: node.js
 msgid "Removing the node failed. The node is still present in the configuration."
 msgstr ""
+
+msgid "Host header"
+msgstr ""

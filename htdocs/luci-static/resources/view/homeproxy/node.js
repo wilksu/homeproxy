@@ -1342,8 +1342,10 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 	/* HTTP config end */
 
 	/* WebSocket config start */
-	o = s.option(form.Value, 'ws_host', _('Host'));
+	o = s.option(form.DynamicList, 'ws_host', _('Host header'));
 	o.depends('transport', 'ws');
+	o.depends('transport', 'http');
+	o.depends('transport', 'httpupgrade');
 	o.modalonly = true;
 
 	o = s.option(form.Value, 'ws_path', _('Path'));
@@ -1651,6 +1653,11 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 
 	o = s.option(form.Flag, 'udp_fragment', _('UDP Fragment'),
 		_('Enable UDP fragmentation.'));
+	o.rmempty = false;
+	o.cfgvalue = function(sid) {
+		return uci.get(data[0], sid, this.option) ??
+			(['direct', 'hysteria', 'hysteria2', 'tuic'].includes(uci.get(data[0], sid, 'type')) ? '1' : '0');
+	};
 	o.modalonly = true;
 
 	o = s.option(form.Flag, 'udp_over_tcp', _('UDP over TCP'),
