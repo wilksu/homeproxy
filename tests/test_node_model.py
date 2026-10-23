@@ -28,3 +28,32 @@ class NodeModelTests(unittest.TestCase):
    self.assertIn('not permitted',self.resolve(c)['error'])
   c={'ref':{'.type':'node','type':'tailscale','tailscale_ssh_server':'1'}}
   self.assertEqual(self.resolve(c)['node']['type'],'tailscale')
+ def test_shared_dependency_graph_is_read_once_per_generation(self):
+  # Each group has two shared predecessors: an exponential walk without memoization.
+  nodes={'n0':{'.type':'node','type':'socks'},'n1':{'.type':'node','type':'socks'}}
+  for i in range(2,100):nodes['n'+str(i)]={'.type':'node','type':'selector','group_nodes':['n'+str(i-1),'n'+str(i-2)]}
+  code="import{nodeModel}from'node_model';const nodes="+json.dumps(nodes)+";let reads=0;const model=nodeModel({get_all:(c,id)=>{reads++;return nodes[id];}});for(let id in keys(nodes))model.validate(id);print(reads);"
+  result=subprocess.run([UCODE,'-L',str(ROOT/'root/etc/homeproxy/scripts/*.uc'),'-e',code],capture_output=True,text=True,timeout=5)
+  self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(int(result.stdout),100)
+
+ def test_failed_validation_does_not_poison_other_roots_or_hide_cycles(self):
+  code="""import{nodeModel}from'node_model';
+const nodes={cycle:{'.type':'node',type:'selector',group_nodes:['cycle']},valid:{'.type':'node',type:'socks'},missing:{'.type':'node',type:'selector',group_nodes:['absent']}};
+const model=nodeModel({get_all:(c,id)=>nodes[id]});let errors=[];
+for(let id in ['cycle','missing','cycle','missing'])try{model.validate(id);}catch(e){push(errors,''+e);}
+printf('%J',{errors,node:model.validate('valid')});"""
+  result=subprocess.run([UCODE,'-L',str(ROOT/'root/etc/homeproxy/scripts/*.uc'),'-e',code],capture_output=True,text=True)
+  self.assertEqual(result.returncode,0,result.stderr);data=json.loads(result.stdout)
+  self.assertEqual(len(data['errors']),4)
+  self.assertTrue(all('Circular' in e for e in data['errors'][::2]))
+  self.assertTrue(all('missing' in e for e in data['errors'][1::2]))
+  self.assertEqual(data['node']['type'],'socks')
+
+ def test_new_model_observes_changes_and_returned_records_are_independent(self):
+  code="""import{nodeModel}from'node_model';
+const nodes={base:{'.type':'node',type:'socks',password:'old'}};
+const uci={get_all:(c,id)=>nodes[id]};const first=nodeModel(uci);
+let returned=first.validate('base');returned.password='caller-edit';nodes.base={'.type':'node',type:'socks',password:'new'};
+printf('%J',[first.validate('base').password,nodeModel(uci).validate('base').password]);"""
+  result=subprocess.run([UCODE,'-L',str(ROOT/'root/etc/homeproxy/scripts/*.uc'),'-e',code],capture_output=True,text=True)
+  self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(json.loads(result.stdout),['old','new'])
