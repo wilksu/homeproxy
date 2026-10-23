@@ -1082,6 +1082,13 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 	/* Hysteria (2) config end */
 
 	/* Shadowsocks config start */
+	o = s.option(form.ListValue, 'shadowsocks_network', _('Network'));
+	o.value('', _('Default'));
+	o.value('tcp', _('TCP'));
+	o.value('udp', _('UDP'));
+	o.depends('type', 'shadowsocks');
+	o.modalonly = true;
+
 	o = s.option(form.ListValue, 'shadowsocks_encrypt_method', _('Encrypt method'));
 	for (let i of hp.shadowsocks_encrypt_methods)
 		o.value(i);

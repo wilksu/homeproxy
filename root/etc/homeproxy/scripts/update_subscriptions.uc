@@ -8,7 +8,7 @@
 'use strict';
 
 import { md5 } from 'digest';
-import { importNodes, nodeID } from 'node_import';
+import { importNodes, nodeID, subscriptionDocument } from 'node_import';
 import { open } from 'fs';
 import { connect } from 'ubus';
 import { cursor } from 'uci';
@@ -552,8 +552,7 @@ function main() {
 
 		let parsed=[];
 		try {
-			let document;
-			try { document=json(res); } catch(e) {}
+			const document = subscriptionDocument(res);
 			if(document?.outbounds || document?.endpoints) parsed=importNodes(document,sourceID);
 			else {
 				let nodes=document ? document.servers || document : split(trim(decodeBase64Str(res) || res),'\n');

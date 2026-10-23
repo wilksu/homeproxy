@@ -272,6 +272,7 @@ function generate_outbound(node) {
 		disable_mtu_discovery: strToBool(node.hysteria_disable_mtu_discovery),
 		/* Shadowsocks */
 		method: node.shadowsocks_encrypt_method,
+		network: node.type === 'shadowsocks' ? node.shadowsocks_network : null,
 		plugin: node.shadowsocks_plugin,
 		plugin_opts: node.shadowsocks_plugin_opts,
 		/* ShadowTLS / Socks */

@@ -16,6 +16,12 @@ function fields(target, source, mapping, label) {
  for(let key in keys(source || {})){if(!mapping[key])die(label+'.'+key+': field is not supported by the node form yet');target[mapping[key]]=value(source[key]);}
 }
 export function nodeID(source, key) { return 'n'+md5(source+'\n'+key); };
+export function subscriptionDocument(content) {
+ try { return json(content); } catch(e) {}
+ if(match(content, /(^|\n)[ \t]*(proxies|proxy-providers|proxy-groups)[ \t]*:/))
+  die('Clash/Mihomo YAML subscriptions are not supported; use sing-box JSON, SIP008, or share links');
+ return null;
+};
 export function importNode(input, resolve) {
  if (input.type === 'tailscale') die('Tailscale endpoints must be configured locally; subscriptions cannot manage router services');
  const n={type:input.type,label:input.tag,source_tag:input.tag};
@@ -28,6 +34,7 @@ export function importNode(input, resolve) {
   if(key==='detour'){n.node_detour=resolve(v);continue;}
   if(key==='domain_resolver')die('Outbound '+input.tag+' has a DNS resolver dependency; select a local resolver before importing nodes only');
   if(key==='bind_interface' || key==='routing_mark'){n['node_'+key]=value(v);continue;}
+  if(key==='network' && input.type==='shadowsocks'){n.shadowsocks_network=value(v);continue;}
   if(scalar[key]){n[scalar[key]]=value(v);continue;}
   if(times[key]){n[times[key]]=seconds(v);continue;}
   if(key==='min_idle_session'){n.anytls_min_idle_session=value(v);continue;}
