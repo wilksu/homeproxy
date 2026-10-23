@@ -148,7 +148,7 @@ export function parseValue(option, section_id) {
  * Load htdocs/luci-static/resources/homeproxy.js with the form classes above,
  * mirroring how LuCI wires ListValue: renderWidget returns the ui.Select frame.
  */
-export function loadHomeproxy({ document = null, uci = { sections: () => [], get: () => null } } = {}) {
+export function loadHomeproxy({ document = null, uci = { sections: () => [], get: () => null }, rpc = {} } = {}) {
 	const source = fs.readFileSync('htdocs/luci-static/resources/homeproxy.js', 'utf8');
 	const form = {
 		DynamicList: Klass.extend({ __name__: 'CBI.DynamicList' }),
@@ -179,7 +179,7 @@ export function loadHomeproxy({ document = null, uci = { sections: () => [], get
 	};
 	const module = new Function('baseclass', 'form', 'fs', 'rpc', 'uci', 'ui', 'L', 'E', 'document', '_',
 		source)(
-		{ extend: definition => Klass.extend(definition) }, form, {}, {}, uci, {}, L, E, document, value => value);
+		{ extend: definition => Klass.extend(definition) }, form, {}, rpc, uci, {}, L, E, document, value => value);
 
 	return { module, hp: new module(), form, E, L, uci, document };
 }

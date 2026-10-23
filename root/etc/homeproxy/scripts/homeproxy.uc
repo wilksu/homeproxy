@@ -35,20 +35,23 @@ export function executeCommand(...args) {
 	outfd.seek(0);
 	errfd.seek(0);
 
-	const stdout = outfd.read(1024 * 512) ?? '';
+	const limit = 1024 * 512;
+	const stdout = outfd.read(limit + 1) ?? '';
 	const stderr = errfd.read(1024 * 512) ?? '';
 
 	outfd.close();
 	errfd.close();
 
 	const binary = isBinary(stdout);
+	const truncated = length(stdout) > limit;
 
 	return {
 		command: join(' ', args),
-		stdout: binary ? null : stdout,
+		stdout: binary || truncated ? null : stdout,
 		stderr,
 		exitcode,
-		binary
+		binary,
+		truncated
 	};
 };
 
@@ -66,16 +69,6 @@ export function getTime(epoch) {
 
 };
 
-export function wGET(url, ua) {
-	if (!url || type(url) !== 'string')
-		return null;
-
-	if (!ua)
-		ua = 'Wget/1.21 (HomeProxy, like v2rayN)';
-
-	const output = executeCommand(`/usr/bin/wget -qO- --user-agent ${shellQuote(ua)} --timeout=10 ${shellQuote(url)}`) || {};
-	return trim(output.stdout);
-};
 /* Utilities end */
 
 /* String helper start */
@@ -164,7 +157,7 @@ export function parseURL(url) {
 
 	objurl.href = url;
 
-	url = replace(url, /#(.+)$/, (_, val) => {
+	url = replace(url, /#(.*)$/, (_, val) => {
 		objurl.hash = val;
 		return '';
 	});
@@ -174,14 +167,14 @@ export function parseURL(url) {
 		return '';
 	});
 
-	url = replace(url, /\?(.+)/, (_, val) => {
+	url = replace(url, /\?(.*)/, (_, val) => {
 		objurl.search = val;
 		objurl.searchParams = urldecode_params(val);
 		return '';
 	});
 
 	url = replace(url, /^\/\/([^\/]+)/, (_, val) => {
-		val = replace(val, /^([^@]+)@/, (_, val) => {
+		val = replace(val, /^(.+)@/, (_, val) => {
 			objurl.userinfo = val;
 			return '';
 		});
@@ -205,18 +198,11 @@ export function parseURL(url) {
 		return null;
 
 	if (objurl.userinfo) {
-		objurl.userinfo = replace(objurl.userinfo, /:(.+)$/, (_, val) => {
-			objurl.password = val;
-			return '';
-		});
-
-		if (match(objurl.userinfo, /^[A-Za-z0-9\+\-\_\.]+$/)) {
-			objurl.username = objurl.userinfo;
-			delete objurl.userinfo;
-		} else {
-			delete objurl.userinfo;
-			delete objurl.password;
-		}
+		const separator = index(objurl.userinfo, ':');
+		objurl.username = separator < 0 ? objurl.userinfo : substr(objurl.userinfo, 0, separator);
+		if (separator >= 0)
+			objurl.password = substr(objurl.userinfo, separator + 1);
+		delete objurl.userinfo;
 	};
 
 	if (!objurl.port)

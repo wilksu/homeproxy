@@ -7,7 +7,7 @@ UCODE=os.environ.get('UCODE')
 class SubscriptionReferenceTests(unittest.TestCase):
  def check(self,records,removed):
   source=(ROOT/'root/etc/homeproxy/scripts/update_subscriptions.uc').read_text()
-  body=source[source.index('function externalReferences'):source.index('\nfunction service_action')]
+  body=source[source.index('function externalReferences'):source.index('\nfunction main')]
   code='''
 const records=%s;
 const uci={foreach:function(_config,kind,callback){for(let record in records)if(record['.type']===kind)callback(record);}};

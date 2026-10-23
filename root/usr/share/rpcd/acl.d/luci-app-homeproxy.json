@@ -48,6 +48,7 @@
 			"ubus": {
 				"luci.homeproxy": [
 					"api_control",
+					"share_links_parse",
 					"api_secret",
 					"diagnose",
 					"acllist_write",

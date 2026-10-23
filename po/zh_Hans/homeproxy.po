@@ -4412,3 +4412,6 @@ msgstr "订阅更新失败，请查看 HomeProxy 日志了解详情。"
 
 msgid "Host header"
 msgstr "Host 请求头"
+
+msgid "Expecting a valid HTTP Host, optionally including a port."
+msgstr "请输入有效的 HTTP Host，可包含端口。"

@@ -91,6 +91,13 @@ function getSubscriptionInfo(uciconfig) {
 
 return baseclass.extend({
 	getSubscriptionInfo,
+	validateHTTPHost(_section, value) {
+		try {
+			if (!value || (!/[\s\x00-\x20\x7f\\/?#@]/.test(value) && new URL('http://' + value).hostname))
+				return true;
+		} catch (_) {}
+		return _('Expecting a valid HTTP Host, optionally including a port.');
+	},
 	dns_strategy: {
 		'': _('Default'),
 		'prefer_ipv4': _('Prefer IPv4'),
@@ -281,21 +288,6 @@ return baseclass.extend({
 		return (p(a) + p(b) + p(c) + p(d)).toLowerCase();
 	},
 
-	decodeBase64Str(str) {
-		if (!str)
-			return null;
-
-		/* Thanks to luci-app-ssr-plus */
-		str = str.replace(/-/g, '+').replace(/_/g, '/');
-		let padding = (4 - str.length % 4) % 4;
-		if (padding)
-			str = str + Array(padding + 1).join('=');
-
-		return decodeURIComponent(Array.prototype.map.call(atob(str), (c) =>
-			'%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-		).join(''));
-	},
-
 	getBuiltinFeatures() {
 		const callGetSingBoxFeatures = rpc.declare({
 			object: 'luci.homeproxy',
@@ -304,6 +296,15 @@ return baseclass.extend({
 		});
 
 		return L.resolveDefault(callGetSingBoxFeatures(), {});
+	},
+
+	async parseShareLinks(content) {
+		const result = await rpc.declare({
+			object: 'luci.homeproxy', method: 'share_links_parse', params: ['content'], expect: { '': {} }
+		})(content);
+		if (result.error || !Array.isArray(result.nodes) || !Number.isInteger(result.total))
+			throw new Error(result.error || _('No valid share link found.'));
+		return result;
 	},
 
 	generateRand(type, length) {

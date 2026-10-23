@@ -4252,3 +4252,6 @@ msgstr ""
 
 msgid "Host header"
 msgstr ""
+
+msgid "Expecting a valid HTTP Host, optionally including a port."
+msgstr ""
