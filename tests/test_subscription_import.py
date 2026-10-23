@@ -145,6 +145,31 @@ class SubscriptionImportTests(unittest.TestCase):
   self.assertEqual(node['obfs'], 'fixture-obfs')
   self.assertEqual(node['auth_str'], 'fixture-auth')
 
+ def test_empty_optional_references_use_native_defaults(self):
+  for empty in ['',None]:
+   with self.subTest(empty=empty):
+    nodes, outbounds = self.roundtrip({'outbounds':[
+     {'type':'selector','tag':'choose','outbounds':['proxy'],'default':empty},
+     self.proxy(detour=empty)]})
+    self.assertNotIn('group_default', nodes[0])
+    self.assertNotIn('node_detour', nodes[1])
+    self.assertTrue(all(not o.get('detour') and not o.get('default') for o in outbounds))
+
+ def test_hysteria_authentication_follows_core_precedence(self):
+  cases = [({'auth_str':'plain','auth':'YmFzZQ=='}, 'string', 'plain'),
+   ({'auth':'YmFzZQ==','auth_str':'plain'}, 'string', 'plain'),
+   ({'auth_str':'','auth':'YmFzZQ=='}, 'base64', 'YmFzZQ=='),
+   ({'auth':'YmFzZQ==','auth_str':''}, 'base64', 'YmFzZQ=='),
+   ({'auth':'','auth_str':''}, None, None), ({'auth':None,'auth_str':None}, None, None)]
+  for options, kind, payload in cases:
+   with self.subTest(options=options):
+    nodes, outbounds = self.roundtrip({'outbounds':[self.proxy('hysteria',up_mbps=10,down_mbps=10,**options)]})
+    self.assertEqual(nodes[0].get('hysteria_auth_type'), kind)
+    self.assertEqual(nodes[0].get('hysteria_auth_payload'), payload)
+    generated = next(o for o in outbounds if o['type']=='hysteria')
+    self.assertEqual(generated.get('auth_str'), payload if kind=='string' else None)
+    self.assertEqual(generated.get('auth'), payload if kind=='base64' else None)
+
  def test_protocol_options_survive_import_and_generation(self):
   cases = [
    self.proxy('http', username='fixture', password='fixture'),

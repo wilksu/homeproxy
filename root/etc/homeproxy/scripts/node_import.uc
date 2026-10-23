@@ -47,9 +47,9 @@ export function importNode(input, resolve) {
  for(let key in fieldKeys(input)) {
   const v=input[key];if(key in ['type','tag'])continue;
   if(key==='outbounds'){n.group_nodes=map(v,t=>resolve(t));continue;}
-  if(key==='default'){n.group_default=resolve(v);continue;}
+  if(key==='default'){n.group_default=v==='' ? null : resolve(v);continue;}
   if(key in ['url','interval','tolerance','idle_timeout','interrupt_exist_connections'] && input.type in ['selector','urltest']){n['group_'+key]=(key in ['interval','idle_timeout'])?seconds(v):value(v);continue;}
-  if(key==='detour'){n.node_detour=resolve(v);continue;}
+  if(key==='detour'){n.node_detour=v==='' ? null : resolve(v);continue;}
   if(key==='domain_resolver')die('Outbound '+input.tag+' has a DNS resolver dependency; select a local resolver before importing nodes only');
   if(key==='bind_interface' || key==='routing_mark'){n['node_'+key]=value(v);continue;}
   if(key==='network' && input.type==='shadowsocks'){n.shadowsocks_network=network(v);continue;}
@@ -57,7 +57,7 @@ export function importNode(input, resolve) {
   if(times[key]){n[times[key]]=seconds(v);continue;}
   if(key==='min_idle_session'){n.anytls_min_idle_session=value(v);continue;}
   if(key==='version'){n[input.type==='shadowtls'?'shadowtls_version':'socks_version']=value(v);continue;}
-  if(key==='auth' || key==='auth_str'){n.hysteria_auth_type=key==='auth'?'base64':'string';n.hysteria_auth_payload=value(v);continue;}
+  if(key==='auth' || key==='auth_str')continue;
   if(key==='obfs'){
    if(type(v)==='string')n.hysteria_obfs_password=v;
    else fields(n,v,{type:'hysteria_obfs_type',password:'hysteria_obfs_password',min_packet_size:'hysteria_obfs_min_packet_size',max_packet_size:'hysteria_obfs_max_packet_size'},'obfs');continue;
@@ -102,6 +102,11 @@ export function importNode(input, resolve) {
    }continue;
   }
   die(input.type+'.'+key+': field is not supported by the node form yet');
+ }
+ // Hysteria prefers a nonempty auth_str, independent of JSON field order.
+ if(input.type==='hysteria' && (input.auth_str || input.auth)){
+  n.hysteria_auth_type=input.auth_str ? 'string' : 'base64';
+  n.hysteria_auth_payload=value(input.auth_str || input.auth);
  }
  // Preserve native defaults when the editor has a different default for new nodes.
  if(input.type==='vmess' && !n.vmess_global_padding)n.vmess_global_padding='0';
