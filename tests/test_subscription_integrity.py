@@ -45,7 +45,7 @@ class SubscriptionIntegrityTests(unittest.TestCase):
    for length in [LIMIT-1,LIMIT,LIMIT+1]:
     with self.subTest(length=length):
      feed=path/'feed';feed.write_text('x'*length)
-     code="import{executeCommand,shellQuote}from'homeproxy';let r=executeCommand('cat '+shellQuote("+json.dumps(str(feed))+"));print(sprintf('%J',{length:r.stdout===null?null:length(r.stdout),truncated:r.truncated,exitcode:r.exitcode}));"
+     code="import{mkstemp}from'fs';import{executeCommand,shellQuote}from'homeproxy';const held=map([1,2,3,4,5,6,7,8,9,10,11,12],()=>mkstemp());let r=executeCommand('cat '+shellQuote("+json.dumps(str(feed))+"));print(sprintf('%J',{length:r.stdout===null?null:length(r.stdout),truncated:r.truncated,exitcode:r.exitcode}));"
      p=subprocess.run([UCODE,'-L',str(ROOT/'tests/support/*.uc'),'-L',str(ROOT/'root/etc/homeproxy/scripts/*.uc'),'-e',code],capture_output=True,text=True)
      self.assertEqual(p.returncode,0,p.stderr)
      self.assertEqual(json.loads(p.stdout),{'length':length if length<=LIMIT else None,'truncated':length>LIMIT,'exitcode':0})

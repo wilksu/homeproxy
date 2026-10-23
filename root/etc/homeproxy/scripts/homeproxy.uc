@@ -30,7 +30,8 @@ export function executeCommand(...args) {
 	let outfd = mkstemp();
 	let errfd = mkstemp();
 
-	const exitcode = system(`${join(' ', args)} >&${outfd.fileno()} 2>&${errfd.fileno()}`);
+	// File paths also work when the shell cannot duplicate descriptors above 9.
+	const exitcode = system(`${join(' ', args)} >/proc/self/fd/${outfd.fileno()} 2>/proc/self/fd/${errfd.fileno()}`);
 
 	outfd.seek(0);
 	errfd.seek(0);
