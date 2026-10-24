@@ -4,6 +4,14 @@
 import { urldecode, urlencode } from 'luci.http';
 import { decodeBase64Str, isEmpty, parseURL, validation } from './homeproxy.uc';
 
+// Keep imported methods representable by the node editor as well as the core.
+const shadowsocksMethods = [
+	'none', 'aes-128-gcm', 'aes-192-gcm', 'aes-256-gcm',
+	'chacha20-ietf-poly1305', 'xchacha20-ietf-poly1305',
+	'2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm',
+	'2022-blake3-chacha20-poly1305'
+];
+
 function parse(uri, features) {
 	let config, url, params;
 
@@ -44,7 +52,7 @@ function parse(uri, features) {
 			break;
 		case 'http':
 		case 'https':
-			url = parseURL('http://' + uri[1]) || {};
+			url = parseURL(uri[0] + '://' + uri[1]) || {};
 
 			config = {
 				label: url.hash ? urldecode(url.hash) : null,
@@ -365,6 +373,12 @@ function parse(uri, features) {
 	}
 
 	if (!isEmpty(config)) {
+		if (config.type === 'shadowsocks' && !(config.shadowsocks_encrypt_method in shadowsocksMethods))
+			return null;
+		if ((config.type in ['anytls', 'trojan'] && !config.password) ||
+		    (config.type in ['tuic', 'vless'] && !config.uuid))
+			return null;
+
 		if (config.address)
 			config.address = replace(config.address, /\[|\]/g, '');
 

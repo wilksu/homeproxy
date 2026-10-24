@@ -1,6 +1,7 @@
 """One parser serves manual RPC imports and subscription updates."""
-import base64, json, os, pathlib, shutil, subprocess, tempfile, unittest
-from test_generator import ROOT, UCODE
+import base64, copy, json, os, pathlib, re, shutil, subprocess, tempfile, unittest
+from test_generator import ROOT, UCODE, CORE, BASE
+import test_generator as generator
 
 
 def modules(directory):
@@ -90,3 +91,71 @@ class ShareLinkTests(unittest.TestCase):
   acl=json.loads((ROOT/'root/usr/share/rpcd/acl.d/luci-app-homeproxy.json').read_text())['luci-app-homeproxy']
   self.assertNotIn('share_links_parse',acl['read']['ubus']['luci.homeproxy'])
   self.assertIn('share_links_parse',acl['write']['ubus']['luci.homeproxy'])
+
+ def test_invalid_shadowsocks_methods_are_rejected_in_every_encoding(self):
+  invalid=[]
+  for method in ['invalid','','AES-128-GCM','aes-128-cfb']:
+   auth=method+':fixture'
+   invalid.extend(['ss://'+auth+'@192.0.2.1:443/',
+    'ss://'+base64.b64encode(auth.encode()).decode()+'@192.0.2.1:443/',
+    'ss://'+base64.b64encode((auth+'@192.0.2.1:443').encode()).decode()])
+  self.assertEqual(self.parse(invalid)['individual'],[None]*len(invalid))
+  self.assertEqual(self.parse(invalid,rpc=True)['nodes'],[])
+  with tempfile.TemporaryDirectory() as tmp:
+   mods=modules(tmp)
+   objects=[{'nodetype':'sip008','server':'192.0.2.1','server_port':443,'method':m,'password':'fixture'} for m in ['invalid',None,'']]
+   code="import{parseShareLink}from'share_links';printf('%J',map("+json.dumps(objects)+",n=>parseShareLink(n,{})));"
+   result=subprocess.run([UCODE,'-L',str(mods/'*.uc'),'-L',str(ROOT/'tests/support/*.uc'),'-e',code],capture_output=True,text=True)
+   self.assertEqual(result.returncode,0,result.stderr)
+   self.assertEqual(json.loads(result.stdout),[None]*len(objects))
+
+ def test_protocol_required_credentials_are_not_lost_when_parsers_are_unified(self):
+  invalid=['anytls://192.0.2.1:443/','trojan://192.0.2.1:443/',
+   'tuic://192.0.2.1:443/','vless://192.0.2.1:443/?type=tcp']
+  self.assertEqual(self.parse(invalid)['individual'],[None]*len(invalid))
+  self.assertEqual(self.parse(invalid,rpc=True)['nodes'],[])
+  # A VLESS transport omitted from the link can use the core's TCP default.
+  node=self.parse(['vless://00000000-0000-4000-8000-000000000001@192.0.2.1:443/'],rpc=True)['nodes'][0]
+  self.assertEqual(node['type'],'vless');self.assertNotIn('transport',node)
+
+ @unittest.skipUnless(CORE,'SING_BOX required')
+ def test_http_scheme_defaults_and_explicit_ports_survive_generation(self):
+  cases=[]
+  for scheme,default in [('http',80),('https',443)]:
+   for host in ['192.0.2.1','example.test','[2001:db8::1]']:
+    for port in [None,'',80,443,8443]:
+     suffix='' if port is None else ':'+str(port)
+     cases.append((scheme+'://fixture:password@'+host+suffix+'/',port or default,scheme=='https'))
+  nodes=self.parse([link for link,_,_ in cases],rpc=True)['nodes']
+  self.assertEqual(nodes,self.parse([link for link,_,_ in cases])['individual'])
+  config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
+  for i,(node,(_,port,tls)) in enumerate(zip(nodes,cases)):
+   self.assertEqual(int(node['port']),port,cases[i][0]);self.assertEqual(node['tls'],'1' if tls else '0')
+   config['fixture'+str(i)]={**node,'.type':'node'}
+  config['all']={'.type':'node','type':'selector','group_nodes':['fixture'+str(i) for i in range(len(nodes))]}
+  config['config']['main_node']='all'
+  outbounds={n['tag']:n for n in generator.GeneratorTests().generate(config)['outbounds']}
+  for i,(_,port,tls) in enumerate(cases):
+   out=outbounds['cfg-fixture'+str(i)+'-out']
+   self.assertEqual(out['server_port'],port);self.assertEqual(bool(out.get('tls',{}).get('enabled')),tls)
+  invalid=[scheme+'://192.0.2.1:'+port+'/' for scheme in ['http','https'] for port in ['invalid','-1','65536']]
+  self.assertEqual(self.parse(invalid,rpc=True)['nodes'],[])
+
+ @unittest.skipUnless(CORE,'SING_BOX required')
+ def test_every_editor_shadowsocks_method_is_accepted_and_passes_the_core(self):
+  source=(ROOT/'htdocs/luci-static/resources/homeproxy.js').read_text()
+  block=re.search(r'shadowsocks_encrypt_methods:\s*\[([^]]+)\]',source).group(1)
+  methods=re.findall(r"'([^']+)'",block)
+  self.assertTrue(methods)
+  links=[]
+  for method in methods:
+   password=base64.b64encode(b'x'*(16 if 'aes-128' in method else 32)).decode() if method.startswith('2022-') else 'fixture'
+   links.append('ss://'+base64.b64encode((method+':'+password).encode()).decode()+'@192.0.2.1:443/')
+  nodes=self.parse(links,rpc=True)['nodes']
+  self.assertEqual([n['shadowsocks_encrypt_method'] for n in nodes],methods)
+  config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
+  for i,node in enumerate(nodes):config['fixture'+str(i)]={**node,'.type':'node'}
+  config['all']={'.type':'node','type':'selector','group_nodes':['fixture'+str(i) for i in range(len(nodes))]}
+  config['config']['main_node']='all'
+  outbounds={n['tag']:n for n in generator.GeneratorTests().generate(config)['outbounds']}
+  self.assertEqual([outbounds['cfg-fixture'+str(i)+'-out']['method'] for i in range(len(nodes))],methods)

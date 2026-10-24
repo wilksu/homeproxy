@@ -180,7 +180,7 @@ export function parseURL(url) {
 			return '';
 		});
 
-		val = replace(val, /:(\d+)$/, (_, val) => {
+		val = replace(val, /:(\d*)$/, (_, val) => {
 			objurl.port = val;
 			return '';
 		});
