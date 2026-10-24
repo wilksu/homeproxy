@@ -30,7 +30,7 @@ function parse(uri, features) {
 			};
 		}
 	} else if (type(uri) === 'string') {
-		uri = split(trim(uri), '://');
+		uri = split(trim(uri), '://', 2);
 
 		switch (uri[0]) {
 		case 'anytls':
@@ -140,18 +140,16 @@ function parse(uri, features) {
 
 			break;
 		case 'ss':
-			/* "Lovely" Shadowrocket format */
-			const ss_suri = split(uri[1], '#');
-			let ss_slabel = '';
-			if (length(ss_suri) <= 2) {
-				if (length(ss_suri) === 2)
-					ss_slabel = '#' + urlencode(ss_suri[1]);
-				if (decodeBase64Str(ss_suri[0]))
-					uri[1] = decodeBase64Str(ss_suri[0]) + ss_slabel;
+			const ss_suri = split(uri[1], '#', 2);
+			const ss_decoded = decodeBase64Str(ss_suri[0]);
+			if (ss_decoded) {
+				// Full Base64 stores raw credentials, including URI delimiters and '%'.
+				const parts = match(ss_decoded, /^([^:]+):(.*)@([^@]+)$/);
+				if (!parts)
+					return null;
+				uri[1] = urlencode(parts[1]) + ':' + urlencode(parts[2]) + '@' + parts[3] +
+					(length(ss_suri) > 1 ? '#' + ss_suri[1] : '');
 			}
-
-			/* Legacy format is not supported, it should be never appeared in modern subscriptions */
-			/* https://github.com/shadowsocks/shadowsocks-org/commit/78ca46cd6859a4e9475953ed34a2d301454f579e */
 
 			/* SIP002 format https://shadowsocks.org/guide/sip002.html */
 			url = parseURL('http://' + uri[1]) || {};
@@ -159,7 +157,7 @@ function parse(uri, features) {
 			let ss_userinfo = {};
 			if (url.username && url.password !== null)
 				/* User info encoded with URIComponent */
-				ss_userinfo = [url.username, urldecode(url.password)];
+				ss_userinfo = [urldecode(url.username), urldecode(url.password)];
 			else if (url.username)
 				/* User info encoded with base64 */
 				ss_userinfo = split(decodeBase64Str(urldecode(url.username)), ':', 2);

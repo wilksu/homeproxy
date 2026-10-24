@@ -2,6 +2,7 @@
 import base64, copy, json, os, pathlib, re, shutil, subprocess, tempfile, unittest
 from test_generator import ROOT, UCODE, CORE, BASE
 import test_generator as generator
+from urllib.parse import quote
 
 
 def modules(directory):
@@ -161,3 +162,50 @@ class ShareLinkTests(unittest.TestCase):
   config['config']['main_node']='all'
   outbounds={n['tag']:n for n in generator.GeneratorTests().generate(config)['outbounds']}
   self.assertEqual([outbounds['cfg-fixture'+str(i)+'-out']['method'] for i in range(len(nodes))],methods)
+
+ @unittest.skipUnless(CORE,'SING_BOX required')
+ def test_nested_scheme_delimiters_in_paths_and_labels_are_preserved(self):
+  path='/relay/https://upstream.test/resource'
+  label='relay https://label.test'
+  links=[]
+  for protocol,user in [('vless','00000000-0000-4000-8000-000000000001'),('trojan','fixture')]:
+   for encoded in [False,True]:
+    links.append(protocol+'://'+user+'@192.0.2.1:443/?type=ws&path='+
+     (quote(path,safe='') if encoded else path)+'#'+quote(label,safe=':/'))
+  nodes=self.parse(links,rpc=True)['nodes']
+  self.assertEqual(len(nodes),len(links))
+  config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
+  for i,node in enumerate(nodes):
+   self.assertEqual(node['ws_path'],path);self.assertEqual(node['label'],label)
+   config['fixture'+str(i)]={**node,'.type':'node'}
+  config['all']={'.type':'node','type':'selector','group_nodes':['fixture'+str(i) for i in range(len(nodes))]}
+  config['config']['main_node']='all'
+  outbounds={n['tag']:n for n in generator.GeneratorTests().generate(config)['outbounds']}
+  for i in range(len(nodes)):self.assertEqual(outbounds['cfg-fixture'+str(i)+'-out']['transport']['path'],path)
+
+ @unittest.skipUnless(CORE,'SING_BOX required')
+ def test_shadowsocks_encodings_preserve_raw_credentials_and_encoded_labels(self):
+  label='香港 01 / %20 https://label.test'
+  passwords=['fixture','a/b','a%20b','a?b','a#b','test/!@#:','密钥:+/%?#']
+  links=[];expected=[]
+  for password in passwords:
+   auth='aes-128-gcm:'+password
+   bodies=['aes-128-gcm:'+quote(password,safe='')+'@192.0.2.1:443',
+    '%61es-128-gcm:'+quote(password,safe='')+'@192.0.2.1:443',
+    base64.urlsafe_b64encode(auth.encode()).decode().rstrip('=')+'@192.0.2.1:443',
+    base64.b64encode((auth+'@192.0.2.1:443').encode()).decode().rstrip('='),
+    base64.urlsafe_b64encode((auth+'@192.0.2.1:443').encode()).decode().rstrip('=')]
+   for body in dict.fromkeys(bodies):
+    links.append('ss://'+body+'#'+quote(label,safe=''))
+    expected.append(password)
+  nodes=self.parse(links,rpc=True)['nodes']
+  self.assertEqual(len(nodes),len(expected))
+  config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
+  for i,(node,password) in enumerate(zip(nodes,expected)):
+   self.assertEqual(node['password'],password);self.assertEqual(node['label'],label)
+   self.assertEqual(node['shadowsocks_encrypt_method'],'aes-128-gcm')
+   config['fixture'+str(i)]={**node,'.type':'node'}
+  config['all']={'.type':'node','type':'selector','group_nodes':['fixture'+str(i) for i in range(len(nodes))]}
+  config['config']['main_node']='all'
+  outbounds={n['tag']:n for n in generator.GeneratorTests().generate(config)['outbounds']}
+  for i,password in enumerate(expected):self.assertEqual(outbounds['cfg-fixture'+str(i)+'-out']['password'],password)
