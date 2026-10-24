@@ -35,7 +35,7 @@ function parse(uri, features) {
 		switch (uri[0]) {
 		case 'anytls':
 			/* https://github.com/anytls/anytls-go/blob/v0.0.8/docs/uri_scheme.md */
-			url = parseURL('http://' + uri[1]) || {};
+			url = parseURL('https://' + uri[1]) || {};
 			params = url.searchParams || {};
 
 			config = {
@@ -96,7 +96,7 @@ function parse(uri, features) {
 		case 'hysteria2':
 		case 'hy2':
 			/* https://v2.hysteria.network/docs/developers/URI-Scheme/ */
-			url = parseURL('http://' + uri[1]) || {};
+			url = parseURL('https://' + uri[1]) || {};
 			params = url.searchParams || {};
 
 			if (!features.with_quic) {

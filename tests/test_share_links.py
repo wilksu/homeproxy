@@ -119,23 +119,25 @@ class ShareLinkTests(unittest.TestCase):
   self.assertEqual(node['type'],'vless');self.assertNotIn('transport',node)
 
  @unittest.skipUnless(CORE,'SING_BOX required')
- def test_http_scheme_defaults_and_explicit_ports_survive_generation(self):
+ def test_protocol_defaults_and_explicit_ports_survive_generation(self):
   cases=[]
-  for scheme,default in [('http',80),('https',443)]:
+  for scheme,default,protocol in [('http',80,'http'),('https',443,'http'),('anytls',443,'anytls'),('hysteria2',443,'hysteria2'),('hy2',443,'hysteria2')]:
    for host in ['192.0.2.1','example.test','[2001:db8::1]']:
     for port in [None,'',80,443,8443]:
      suffix='' if port is None else ':'+str(port)
-     cases.append((scheme+'://fixture:password@'+host+suffix+'/',port or default,scheme=='https'))
-  nodes=self.parse([link for link,_,_ in cases],rpc=True)['nodes']
-  self.assertEqual(nodes,self.parse([link for link,_,_ in cases])['individual'])
+     auth='fixture:password' if protocol=='http' else 'fixture'
+     cases.append((scheme+'://'+auth+'@'+host+suffix+'/',port or default,scheme!='http',protocol))
+  nodes=self.parse([c[0] for c in cases],rpc=True)['nodes']
+  self.assertEqual(nodes,self.parse([c[0] for c in cases])['individual'])
   config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
-  for i,(node,(_,port,tls)) in enumerate(zip(nodes,cases)):
+  for i,(node,(_,port,tls,protocol)) in enumerate(zip(nodes,cases)):
    self.assertEqual(int(node['port']),port,cases[i][0]);self.assertEqual(node['tls'],'1' if tls else '0')
+   self.assertEqual(node['type'],protocol)
    config['fixture'+str(i)]={**node,'.type':'node'}
   config['all']={'.type':'node','type':'selector','group_nodes':['fixture'+str(i) for i in range(len(nodes))]}
   config['config']['main_node']='all'
   outbounds={n['tag']:n for n in generator.GeneratorTests().generate(config)['outbounds']}
-  for i,(_,port,tls) in enumerate(cases):
+  for i,(_,port,tls,protocol) in enumerate(cases):
    out=outbounds['cfg-fixture'+str(i)+'-out']
    self.assertEqual(out['server_port'],port);self.assertEqual(bool(out.get('tls',{}).get('enabled')),tls)
   invalid=[scheme+'://192.0.2.1:'+port+'/' for scheme in ['http','https'] for port in ['invalid','-1','65536']]
