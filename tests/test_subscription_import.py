@@ -111,7 +111,8 @@ class SubscriptionImportTests(unittest.TestCase):
 
  def test_normalization_does_not_bypass_native_validation(self):
   for node in [self.proxy(unknown_option=None), self.proxy(routing_mark=None),
-   self.proxy('vless', tls={'enabled':True, 'handshake_timeout':None})]:
+   self.proxy('vless', tls={'enabled':True, 'handshake_timeout':None}),
+   self.proxy('vless', tls={'enabled':True, 'alpn':True})]:
    with self.subTest(node=node):
     self.assertIn('core validation', self.invoke({'outbounds':[node]})['error'])
 

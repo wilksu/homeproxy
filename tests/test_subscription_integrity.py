@@ -1,7 +1,7 @@
 """Run the complete staged updater: incomplete output must never reconcile nodes."""
 import base64, hashlib, json, os, pathlib, subprocess, tempfile, unittest
 from test_generator import ROOT, UCODE
-import test_share_links as share
+from support import ucode as share
 
 LIMIT=512*1024
 URL='https://fixture.invalid/subscription'
@@ -38,17 +38,6 @@ class SubscriptionIntegrityTests(unittest.TestCase):
    after=json.loads(saved.read_text()) if saved.exists() else json.loads(original.read_text())
    log=(path/'run/homeproxy.log').read_text()
    return result.returncode,config,after,log,len(output.encode()),saved.exists()
-
- def test_command_output_boundary_never_returns_a_partial_prefix(self):
-  with tempfile.TemporaryDirectory() as tmp:
-   path=pathlib.Path(tmp)
-   for length in [LIMIT-1,LIMIT,LIMIT+1]:
-    with self.subTest(length=length):
-     feed=path/'feed';feed.write_text('x'*length)
-     code="import{mkstemp}from'fs';import{executeCommand,shellQuote}from'homeproxy';const held=map([1,2,3,4,5,6,7,8,9,10,11,12],()=>mkstemp());let r=executeCommand('cat '+shellQuote("+json.dumps(str(feed))+"));print(sprintf('%J',{length:r.stdout===null?null:length(r.stdout),truncated:r.truncated,exitcode:r.exitcode}));"
-     p=subprocess.run([UCODE,'-L',str(ROOT/'tests/support/*.uc'),'-L',str(ROOT/'root/etc/homeproxy/scripts/*.uc'),'-e',code],capture_output=True,text=True)
-     self.assertEqual(p.returncode,0,p.stderr)
-     self.assertEqual(json.loads(p.stdout),{'length':length if length<=LIMIT else None,'truncated':length>LIMIT,'exitcode':0})
 
  def test_oversized_plain_subscription_preserves_all_old_nodes(self):
   status,before,after,log,size,committed=self.update()

@@ -1,5 +1,5 @@
 import json,os,pathlib,subprocess,tempfile,unittest
-from test_generator import ROOT,UCODE
+from support.ucode import ROOT,UCODE
 @unittest.skipUnless(UCODE,'UCODE required')
 class NodeModelTests(unittest.TestCase):
  def resolve(self,nodes,id='ref'):
