@@ -333,12 +333,16 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 	};
 	function nodeValidation(sid) {
 		const current=this.section;
+		// Each validation reads the current form and UCI state. Share completed
+		// work within this call only; later edits must create fresh caches.
+		const resolved=new Map(), validated=new Set();
 		const get=(id,key)=>{
 			if(id===sid){const option=current.children.find(o=>o.option===key);const value=option?.formvalue(sid);if(value!==null && value!==undefined)return value;}
 			return uci.get(data[0],id,key);
 		};
 		function effective(id,path=[]){
 			if(path.includes(id))throw new Error(_('Circular node dependency: %s').format([...path,id].map(nodeName).join(' → ')));
+			if(resolved.has(id))return resolved.get(id);
 			if(id!==sid && !uci.get(data[0],id))throw new Error(_('Missing node (%s)').format(id));
 			let result={type:get(id,'type'),detour:get(id,'node_detour'),members:get(id,'group_nodes') || [],default:get(id,'group_default')};
 			if(get(id,'node_mode')==='reference'){
@@ -347,16 +351,19 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 				if(['selector','urltest','tailscale','wireguard'].includes(result.type))throw new Error(_('Choose a proxy node as the base, not a group or endpoint.'));
 			}
 			const override=get(id,'local_detour');if(override)result={...result,detour:override==='_direct'?null:override};
+			resolved.set(id,result);
 			return result;
 		}
 		function visit(id,path=[]){
 			if(path.includes(id))throw new Error(_('Circular node dependency: %s').format([...path,id].map(nodeName).join(' → ')));
+			if(validated.has(id))return;
 			const n=effective(id);
 			if(['selector','urltest'].includes(n.type)){
 				if(!n.members.length)throw new Error(_('Group must contain at least one member.'));
 				if(n.default && !n.members.includes(n.default))throw new Error(_('Default must be a group member.'));
 			}
 			for(const dep of [...n.members,...(n.detour?[n.detour]:[])])visit(dep,[...path,id]);
+			validated.add(id);
 		}
 		try{visit(sid);return true;}catch(e){return e.message;}
 	}
