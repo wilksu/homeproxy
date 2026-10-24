@@ -130,7 +130,8 @@ export function parseValue(option, section_id) {
 	const cval = option.cfgvalue(section_id);
 	const fval = option.formvalue(section_id);
 
-	if (fval == null || fval === '' ||
+	/* LuCI deliberately treats an empty DynamicList array like an empty string. */
+	if (fval == null || fval == '' ||
 	    (fval === option.default && (option.optional || option.rmempty))) {
 		if (option.rmempty || option.optional)
 			return { writes: [], removed: [option.option] };
@@ -147,7 +148,7 @@ export function parseValue(option, section_id) {
  * Load htdocs/luci-static/resources/homeproxy.js with the form classes above,
  * mirroring how LuCI wires ListValue: renderWidget returns the ui.Select frame.
  */
-export function loadHomeproxy({ document = null, uci = { sections: () => [], get: () => null } } = {}) {
+export function loadHomeproxy({ document = null, uci = { sections: () => [], get: () => null }, rpc = {} } = {}) {
 	const source = fs.readFileSync('htdocs/luci-static/resources/homeproxy.js', 'utf8');
 	const form = {
 		DynamicList: Klass.extend({ __name__: 'CBI.DynamicList' }),
@@ -178,7 +179,7 @@ export function loadHomeproxy({ document = null, uci = { sections: () => [], get
 	};
 	const module = new Function('baseclass', 'form', 'fs', 'rpc', 'uci', 'ui', 'L', 'E', 'document', '_',
 		source)(
-		{ extend: definition => Klass.extend(definition) }, form, {}, {}, uci, {}, L, E, document, value => value);
+		{ extend: definition => Klass.extend(definition) }, form, {}, rpc, uci, {}, L, E, document, value => value);
 
 	return { module, hp: new module(), form, E, L, uci, document };
 }

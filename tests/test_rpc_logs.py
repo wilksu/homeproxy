@@ -12,6 +12,7 @@ class RpcLogTests(unittest.TestCase):
    log = directory / 'homeproxy.log'; log.write_text('old log\n')
    untouched = directory / 'other.log'; untouched.write_text('keep\n')
    source = (ROOT / 'root/usr/share/rpcd/ucode/luci.homeproxy').read_text()
+   source = source.replace("'/etc/homeproxy/scripts/share_links.uc'", json.dumps(str(ROOT/'root/etc/homeproxy/scripts/share_links.uc')))
    source = source.replace("const RUN_DIR = '/var/run/homeproxy';", 'const RUN_DIR = ' + json.dumps(tmp) + ';')
    for name, success in [('homeproxy', True), ('sing-box-c', True), ('other', False)]:
     with self.subTest(name=name):

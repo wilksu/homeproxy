@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import { loadNodeHelpers, nodeViewSource } from './support/node-view.mjs';
+import { parseValue } from './support/luci-form.mjs';
+
+test('empty subscription filter keywords are removed by normal form parsing', () => {
+	const start = nodeViewSource.indexOf("o = s.taboption('subscription', form.DynamicList, 'filter_keywords'");
+	const end = nodeViewSource.indexOf("o = s.taboption('subscription', form.Value, 'user_agent'", start);
+	const field = { option: 'filter_keywords', rmempty: true, default: null, depends() {},
+		cfgvalue: () => ['old pattern'], formvalue: () => [] };
+	new Function('s', 'form', '_', 'let o; ' + nodeViewSource.slice(start, end))(
+		{ taboption: () => field }, { DynamicList: {} }, value => value);
+	assert.deepEqual(parseValue(field, 'subscription'), { writes: [], removed: ['filter_keywords'] });
+});
 
 test('remove subscriptions detects defaults, policies, DNS, groups and dial dependencies', () => {
 	const { nodeReferences } = loadNodeHelpers();
@@ -150,8 +161,13 @@ function subscriptionChangeFixture(records) {
 			return result;
 		},
 		set: (_config, section_id, option, value) => {
+			assert.ok(!Array.isArray(value) || value.length, 'rpcd rejects empty UCI lists');
 			calls.push(['set', section_id, option, value]);
 			sections.find(item => item['.name'] === section_id)[option] = value;
+		},
+		unset: (_config, section_id, option) => {
+			calls.push(['unset', section_id, option]);
+			delete sections.find(item => item['.name'] === section_id)[option];
 		},
 		remove: (_config, section_id) => {
 			calls.push(['remove', section_id]);
@@ -180,8 +196,9 @@ test('removing a subscription URL atomically removes its source and nodes', () =
 	assert.deepEqual(calls, [
 		['remove', 'node_one'],
 		['remove', 'src_one'],
-		['set', 'subscription', 'subscription_url', []]
+		['unset', 'subscription', 'subscription_url']
 	]);
+	assert.equal(sections[0].subscription_url, undefined);
 });
 
 test('adding and reordering sources never mutates node ownership', () => {

@@ -6,11 +6,12 @@ permissions:
 jobs:
   python:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - name: Prepare test dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y cmake gcc pkg-config libjson-c-dev curl openssl python3
-      - name: Provide pinned ucode and sing-box (CI only)
+      - name: Provide pinned ucode (CI only)
         run: |
           tools_dir="$RUNNER_TEMP/homeproxy-test-tools"
           mkdir -p "$tools_dir/ucode-src" "$tools_dir/core"
@@ -20,11 +21,18 @@ jobs:
           cmake -S "$tools_dir/ucode-src" -B "$tools_dir/build" -DCMAKE_INSTALL_PREFIX="$tools_dir/install" -DCMAKE_INSTALL_LIBDIR=lib -DUBUS_SUPPORT=OFF -DUCI_SUPPORT=OFF -DULOOP_SUPPORT=OFF
           cmake --build "$tools_dir/build" --parallel 2
           cmake --install "$tools_dir/build"
+          echo "UCODE=$tools_dir/install/bin/ucode" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$tools_dir/install/lib" >> "$GITHUB_ENV"
+      - name: Run isolated unit tests without skips
+        run: python3 scripts/test-python.py --suite unit
+      - name: Prove the unit tests catch removed regression guards
+        run: python3 scripts/test-python.py --suite guards
+      - name: Provide pinned sing-box (CI only)
+        run: |
+          tools_dir="$RUNNER_TEMP/homeproxy-test-tools"
           curl -fsSL --retry 3 https://github.com/SagerNet/sing-box/releases/download/v1.14.0/sing-box-1.14.0-linux-amd64.tar.gz -o "$tools_dir/core.tar.gz"
           echo "2375de6999f4f56ab46b4fc5ddf26a6aba1d3e61a0f4e7ddec2f4690457d5f63  $tools_dir/core.tar.gz" | sha256sum -c -
           tar -xf "$tools_dir/core.tar.gz" -C "$tools_dir/core" --strip-components=1
-          echo "UCODE=$tools_dir/install/bin/ucode" >> "$GITHUB_ENV"
           echo "SING_BOX=$tools_dir/core/sing-box" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=$tools_dir/install/lib" >> "$GITHUB_ENV"
-      - name: Run Python suite without skips
-        run: python3 scripts/test-python.py
+      - name: Run integration and system contracts without skips
+        run: python3 scripts/test-python.py --suite integration

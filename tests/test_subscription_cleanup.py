@@ -1,26 +1,39 @@
-"""Exercise the actual updater's post-import reconciliation, without fetching or restarting."""
-import os,pathlib,subprocess,unittest,json
+"""Reconcile main-node references; activation is owned by the transaction tests."""
+import json, os, pathlib, subprocess, unittest
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 UCODE=os.environ.get('UCODE','')
+
 @unittest.skipUnless(UCODE,'UCODE required')
 class SubscriptionCleanupTests(unittest.TestCase):
- def test_member_cleanup_disabled_udp_and_restart_failure(self):
+ def reconcile(self, main, udp, members, first='live'):
   source=(ROOT/'root/etc/homeproxy/scripts/update_subscriptions.uc').read_text()
-  body=source[source.index('\tlet need_restart = true;'):source.index('\n}\n\nif (!isEmpty(subscription_urls))')]
+  body=source[source.index('\tif (!isEmpty(main_node)'):source.index('\n}\n\nif (!isEmpty(subscription_urls))')]
+  harness='''let state={main_urltest_nodes:MEMBERS,main_udp_urltest_nodes:MEMBERS};
+let commits=0;const uciconfig='homeproxy',ucimain='config',ucinode='node';
+const main_node=MAIN,main_udp_node=UDP,added=1,removed=1;
+const uci={get_first:()=>FIRST,get:(c,n,k)=>k?state[k]:(n==='live'?'node':null),set:(c,n,k,v)=>{state[k]=v;},commit:()=>{commits++;}};
+const isEmpty=v=>!v;const log=()=>{};
+BODY
+printf('%J',{state,commits});'''
+  for key,value in [('MEMBERS',members),('MAIN',main),('UDP',udp),('FIRST',first)]:
+   harness=harness.replace(key,json.dumps(value))
+  result=subprocess.run([UCODE,'-e',harness.replace('BODY',body)],capture_output=True,text=True)
+  self.assertEqual(result.returncode,0,result.stderr);return json.loads(result.stdout)
+
+ def test_removed_members_are_pruned_and_disabled_udp_stays_disabled(self):
   for udp in ['nil','urltest']:
-   for status in [0,1]:
-    with self.subTest(udp=udp,status=status):
-     harness='''let state={main_urltest_nodes:['gone','live'],main_udp_urltest_nodes:['gone','live']};
-let logs=[]; const uciconfig='homeproxy',ucimain='config',ucinode='node';
-let main_node='urltest',main_udp_node=UDP;let added=1,removed=1;
-const uci={get_first:()=> 'live',get:(c,n,k)=>k?state[k]:(n==='live'?'node':null),set:(c,n,k,v)=>{state[k]=v;},commit:()=>true};
-const isEmpty=v=>!v;const log=v=>push(logs,v);const service_action=()=>STATUS;
-function reconcile(){ BODY }
-let result=reconcile();printf('%J',{state,logs,result});'''.replace('UDP',json.dumps(udp)).replace('STATUS',str(status)).replace('BODY',body)
-     p=subprocess.run([UCODE,'-e',harness],capture_output=True,text=True)
-     self.assertEqual(p.returncode,0,p.stderr);r=json.loads(p.stdout)
-     self.assertEqual(r['state']['main_urltest_nodes'],['live'])
-     if udp=='urltest':self.assertEqual(r['state']['main_udp_urltest_nodes'],['live'])
-     else:self.assertNotIn('main_udp_node',r['state'])
-     if status:self.assertFalse(r['result']);self.assertNotIn('Successfully updated subscriptions.',r['logs'])
-     else:self.assertIn('Successfully updated subscriptions.',r['logs'])
+   with self.subTest(udp=udp):
+    result=self.reconcile('urltest',udp,['gone','live'])
+    self.assertEqual(result['commits'],1)
+    self.assertEqual(result['state']['main_urltest_nodes'],['live'])
+    if udp=='urltest':self.assertEqual(result['state']['main_udp_urltest_nodes'],['live'])
+    self.assertNotIn('main_udp_node',result['state'])
+
+ def test_empty_groups_and_missing_nodes_fall_back_to_first_node(self):
+  for main in ['urltest','gone']:
+   result=self.reconcile(main,'urltest',['gone'])
+   self.assertEqual(result['state']['main_node'],'live')
+   self.assertEqual(result['state']['main_udp_node'],'live')
+  result=self.reconcile('gone','same',[],first=None)
+  self.assertEqual(result['state']['main_node'],'nil')
+  self.assertEqual(result['state']['main_udp_node'],'nil')
