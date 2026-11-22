@@ -8,7 +8,7 @@
 'use strict';
 
 import { access, error, lstat, popen, readfile, writefile } from 'fs';
-import { runtime, diagnose, apiSecret } from 'homeproxy_runtime';
+import { runtime, apiRead, apiControl, apiSecret, dashboardLaunch, readLog } from 'homeproxy_runtime';
 import { installCertificate } from 'homeproxy_certificates';
 import { parseShareLinks } from '/etc/homeproxy/scripts/share_links.uc';
 
@@ -55,11 +55,20 @@ const methods = {
 		args: { content: '' },
 		call: req => parseShareLinks(req.args?.content, builtinFeatures())
 	},
-	api_read: { call: () => ({ available: true }) },
-	api_control: { call: () => ({ available: true }) },
+	api_read: {
+		args: { instance: 'client', resource: 'snapshot' },
+		call: (req) => apiRead(req.args?.instance, req.args?.resource)
+	},
+	api_control: {
+		args: { instance: 'client', action: '', target: '', value: '' },
+		call: (req) => apiControl(req.args?.instance, req.args?.action, req.args?.target, req.args?.value)
+	},
 	api_secret: { call: () => apiSecret() },
+	dashboard_launch: {
+		args: { instance: 'instance' },
+		call: (req) => dashboardLaunch(req.args?.instance)
+	},
 	runtime: { args: { instance: 'client' }, call: (req) => runtime(req.args.instance) },
-	diagnose: { args: { stage: '', target: '', instance: 'client' }, call: (req) => diagnose(req.args.stage, req.args.target, req.args.instance) },
 	acllist_read: {
 		args: { type: 'type' },
 		call: function(req) {
@@ -119,15 +128,17 @@ const methods = {
 		}
 	},
 
+	log_read: { args: { type: '' }, call: req => readLog(req.args?.type) },
 	log_clean: {
 		args: { type: 'type' },
 		call: function(req) {
 			if (!(req.args?.type in ['homeproxy', 'sing-box-c', 'sing-box-s']))
 				return { result: false, error: 'illegal type' };
 
-			const filestat = lstat(`${RUN_DIR}/${req.args?.type}.log`);
-			if (filestat)
-				writefile(`${RUN_DIR}/${req.args?.type}.log`, '');
+			const path = `${RUN_DIR}/${req.args.type}.log`;
+			const filestat = lstat(path);
+			if (filestat && (filestat.type !== 'file' || writefile(path, '') !== 0))
+				return { result: false, error: 'Unable to clear the log file' };
 			return { result: true };
 		}
 	},

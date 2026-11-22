@@ -10,7 +10,7 @@
 import { writefile } from 'fs';
 import { cursor } from 'uci';
 import { connect } from 'ubus';
-import { apiService, httpClients, certProviders, sourceMap } from 'config114';
+import { clashApi, nativeApi, httpClients, certProviders } from 'config114';
 
 import {
 	isEmpty, strToBool, strToInt, strToTime,
@@ -186,9 +186,10 @@ if (length(config.inbounds) === 0)
 httpClients(config);
 certProviders(config);
 const lanAddress = connect().call('network.interface.lan', 'status', {})?.['ipv4-address']?.[0]?.address;
-const api = apiService(uci, 'server', lanAddress);
-if (api) config.services = [api];
+const api = clashApi(uci, 'server', lanAddress);
+if (api) config.experimental = { clash_api: api };
+const grpc = nativeApi(uci, 'server', lanAddress);
+if (grpc) config.services = [grpc];
 const outputDir = getenv('HP_OUTPUT_DIR') || RUN_DIR;
 system('mkdir -p ' + outputDir);
 writefile(outputDir + '/sing-box-s.json', sprintf('%.J\n', removeBlankAttrs(config)));
-sourceMap(config, uci, outputDir + '/sing-box-s.sources', {});

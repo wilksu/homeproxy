@@ -76,7 +76,7 @@ prepare_configs() {
 
 install_configs() {
 	local candidate
-	for candidate in "$HP_PREPARED_DIR"/sing-box-*.json "$HP_PREPARED_DIR"/sing-box-*.sources; do
+	for candidate in "$HP_PREPARED_DIR"/sing-box-*.json; do
 		[ -f "$candidate" ] || continue
 		chmod 600 "$candidate"
 		mv "$candidate" "$RUN_DIR/"
@@ -99,6 +99,11 @@ start_service() {
 	local routing_mode proxy_mode
 	config_get routing_mode "config" "routing_mode" "bypass_mainland_china"
 	config_get proxy_mode "config" "proxy_mode" "redirect_tproxy"
+	local native_api external_api native_dashboard
+	config_get_bool native_api observability native_api 0
+	config_get_bool external_api observability external 0
+	config_get_bool native_dashboard observability native_dashboard 0
+	[ "$native_api" = 1 ] && [ "$external_api" = 1 ] || native_dashboard=0
 
 	local outbound_node
 	if [ "$routing_mode" != "custom" ]; then
@@ -217,6 +222,7 @@ start_service() {
 			procd_add_jail_mount_rw "$RUN_DIR/sing-box-c.log"
 			[ "$routing_mode" != "bypass_mainland_china" ] || procd_add_jail_mount_rw "$RUN_DIR/cache.db"
 			procd_add_jail_mount "$HP_DIR/certs/"
+			[ "$native_dashboard" != 1 ] || procd_add_jail_mount_rw "$HP_DIR/dashboard"
 			procd_add_jail_mount "/etc/ssl/"
 			procd_add_jail_mount "/etc/localtime"
 			procd_add_jail_mount "/etc/TZ"
@@ -250,6 +256,7 @@ start_service() {
 			procd_add_jail_mount "$RUN_DIR/sing-box-s.json"
 			procd_add_jail_mount_rw "$RUN_DIR/sing-box-s.log"
 			procd_add_jail_mount_rw "$HP_DIR/certs/"
+			[ "$native_dashboard" != 1 ] || procd_add_jail_mount_rw "$HP_DIR/dashboard"
 			procd_add_jail_mount "/etc/acme/"
 			procd_add_jail_mount "/etc/ssl/"
 			procd_add_jail_mount "/etc/localtime"
@@ -357,7 +364,7 @@ stop_service() {
 	rm -rf "$DNSMASQ_DIR/../dnsmasq-homeproxy.conf" "$DNSMASQ_DIR"
 	/etc/init.d/dnsmasq restart >"/dev/null" 2>&1
 
-	rm -f "$RUN_DIR/sing-box-c.json" "$RUN_DIR/sing-box-s.json" "$RUN_DIR/sing-box-c.sources" "$RUN_DIR/sing-box-s.sources"
+	rm -f "$RUN_DIR/sing-box-c.json" "$RUN_DIR/sing-box-s.json"
 
 	log "Service stopped."
 }

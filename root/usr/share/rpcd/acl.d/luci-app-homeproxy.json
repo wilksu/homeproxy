@@ -20,6 +20,7 @@
 				"luci.homeproxy": [
 					"api_read",
 					"runtime",
+					"log_read",
 					"acllist_read",
 					"singbox_get_features",
 					"resources_get_version",
@@ -35,9 +36,6 @@
 				"/tmp/homeproxy_certificate.tmp": [
 					"write"
 				],
-				"/etc/homeproxy/scripts/update_subscriptions.uc": [
-					"exec"
-				],
 				"/etc/homeproxy/scripts/update_subscriptions_ui.sh": [
 					"exec"
 				]
@@ -48,9 +46,9 @@
 			"ubus": {
 				"luci.homeproxy": [
 					"api_control",
+					"dashboard_launch",
 					"share_links_parse",
 					"api_secret",
-					"diagnose",
 					"acllist_write",
 					"certificate_write",
 					"log_clean",

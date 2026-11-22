@@ -16,7 +16,6 @@ on:
       - 'Makefile'
       - 'pairing.mk'
       - 'scripts/**'
-      - 'frontend/**'
       - 'tests/**'
       - 'package*.json'
       - '.github/**'
@@ -37,7 +36,6 @@ on:
       - 'Makefile'
       - 'pairing.mk'
       - 'scripts/**'
-      - 'frontend/**'
       - 'tests/**'
       - 'package*.json'
       - '.github/**'
@@ -59,8 +57,8 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - name: Generate API resources and check browser scripts
-        run: npm ci && npm run build && npm test
+      - name: Check browser scripts
+        run: npm test
 
       - name: Checkout apk
         uses: actions/checkout@v6

@@ -17,7 +17,7 @@ test('the CGI wrapper returns exit status and keeps private error details in the
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hp-ui-update-'));
  try{
   const updater=path.join(dir,'updater');fs.writeFileSync(updater,'#!/bin/sh\necho private-output\necho private-error >&2\nexit "$1"\n',{mode:0o700});
-  const wrapper=path.join(dir,'wrapper');fs.writeFileSync(wrapper,fs.readFileSync('root/etc/homeproxy/scripts/update_subscriptions_ui.sh','utf8').replace('/etc/homeproxy/scripts/update_subscriptions.uc',updater).replaceAll('/var/run/homeproxy',dir));
+  const wrapper=path.join(dir,'wrapper');fs.writeFileSync(wrapper,fs.readFileSync('root/etc/homeproxy/scripts/update_subscriptions_ui.sh','utf8').replace('/etc/homeproxy/scripts/subscription-transaction.sh',updater).replaceAll('/var/run/homeproxy',dir));
   for(const code of [0,1,17]){const p=spawnSync('/bin/sh',[wrapper,String(code)],{encoding:'utf8'});assert.equal(p.status,0);assert.deepEqual(JSON.parse(p.stdout),{code});assert.equal(p.stderr,'');}
   const log=path.join(dir,'homeproxy.log');assert.match(fs.readFileSync(log,'utf8'),/private-output\nprivate-error/);assert.equal(fs.statSync(log).mode&0o777,0o600);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}

@@ -3,6 +3,7 @@
 import argparse
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -33,7 +34,7 @@ def main():
             if not shutil.which(tool):
                 parser.error(f'Missing test prerequisite: {tool}')
         version = subprocess.check_output([os.environ['SING_BOX'], 'version'], text=True).splitlines()[0]
-        if version != 'sing-box version 1.14.0':
+        if not re.fullmatch(r'sing-box version 1\.14\.[0-9]+(?:\+\S+)?', version):
             parser.error(f'Unexpected test core: {version}')
     subprocess.run([os.environ['UCODE'], '-e',
                     "import {mkstemp} from 'fs'; import {isnan} from 'math'; let f=mkstemp(); f.close();"],

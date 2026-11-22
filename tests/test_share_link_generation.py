@@ -17,7 +17,7 @@ class ShareLinkGenerationTests(ShareLinkProbe, unittest.TestCase):
      cases.append((scheme+'://'+auth+'@'+host+suffix+'/',port or default,scheme!='http',protocol))
   nodes=self.parse([c[0] for c in cases],rpc=True)['nodes']
   self.assertEqual(nodes,self.parse([c[0] for c in cases])['individual'])
-  config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
+  config=copy.deepcopy(BASE);config.pop('node1')
   for i,(node,(_,port,tls,protocol)) in enumerate(zip(nodes,cases)):
    self.assertEqual(int(node['port']),port,cases[i][0]);self.assertEqual(node['tls'],'1' if tls else '0')
    self.assertEqual(node['type'],protocol)
@@ -42,7 +42,7 @@ class ShareLinkGenerationTests(ShareLinkProbe, unittest.TestCase):
    links.append('ss://'+base64.b64encode((method+':'+password).encode()).decode()+'@192.0.2.1:443/')
   nodes=self.parse(links,rpc=True)['nodes']
   self.assertEqual([n['shadowsocks_encrypt_method'] for n in nodes],methods)
-  config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
+  config=copy.deepcopy(BASE);config.pop('node1')
   for i,node in enumerate(nodes):config['fixture'+str(i)]={**node,'.type':'node'}
   config['all']={'.type':'node','type':'selector','group_nodes':['fixture'+str(i) for i in range(len(nodes))]}
   config['config']['main_node']='all'
@@ -59,7 +59,7 @@ class ShareLinkGenerationTests(ShareLinkProbe, unittest.TestCase):
      (quote(path,safe='') if encoded else path)+'#'+quote(label,safe=':/'))
   nodes=self.parse(links,rpc=True)['nodes']
   self.assertEqual(len(nodes),len(links))
-  config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
+  config=copy.deepcopy(BASE);config.pop('node1')
   for i,node in enumerate(nodes):
    self.assertEqual(node['ws_path'],path);self.assertEqual(node['label'],label)
    config['fixture'+str(i)]={**node,'.type':'node'}
@@ -84,7 +84,7 @@ class ShareLinkGenerationTests(ShareLinkProbe, unittest.TestCase):
     expected.append(password)
   nodes=self.parse(links,rpc=True)['nodes']
   self.assertEqual(len(nodes),len(expected))
-  config=copy.deepcopy(BASE);config.pop('node1');config.pop('route1')
+  config=copy.deepcopy(BASE);config.pop('node1')
   for i,(node,password) in enumerate(zip(nodes,expected)):
    self.assertEqual(node['password'],password);self.assertEqual(node['label'],label)
    self.assertEqual(node['shadowsocks_encrypt_method'],'aes-128-gcm')

@@ -1,36 +1,84 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Helpers shared by both generators. UCI remains the source of truth. */
-import { readfile, writefile, access } from 'fs';
+import { readfile } from 'fs';
 import { strToInt } from 'homeproxy';
 
-export function apiService(uci, instance, lanAddress) {
-	const cfg = uci.get_all('homeproxy', 'observability') || {};
-	const external = cfg.external === '1';
+function apiSecret() {
 	const secret = trim(readfile('/etc/homeproxy/api.secret') || '');
 	if (!match(secret, /^[a-f0-9]{64}$/))
 		die('HomeProxy API secret is missing; run /etc/homeproxy/scripts/prepare.sh.');
-	const port = int(cfg[instance + '_port'] || (instance === 'client' ? '5334' : '5335'));
-	if (port < 1 || port > 65535)
+	return secret;
+}
+
+function apiHost(cfg, lanAddress) {
+	const host = cfg.external === '1' ? (cfg.listen || lanAddress) : '127.0.0.1';
+	if (!host || host in ['0.0.0.0', '::', '[::]'])
+		die('Set a LAN address for external HomeProxy API access.');
+	return replace(host, /^\[|\]$/g, '');
+}
+
+function apiOrigins(cfg, fallback) {
+	if (cfg.external !== '1')
+		return null;
+	const origins = cfg.allowed_origins || [fallback];
+	return type(origins) === 'array' ? origins : [origins];
+}
+
+export function clashApi(uci, instance, lanAddress) {
+	const cfg = uci.get_all('homeproxy', 'observability') || {};
+	if (cfg.enabled === '0')
+		return null;
+	const clientPort = int(cfg.client_port || '5334');
+	const serverPort = int(cfg.server_port || '5335');
+	const port = instance === 'client' ? clientPort : serverPort;
+	if (!(port >= 1 && port <= 65535))
 		die('Invalid HomeProxy API port.');
-	if (int(cfg.client_port || '5334') === int(cfg.server_port || '5335'))
+	if (clientPort === serverPort)
 		die('Client and server API ports must differ.');
-	if (external && !!cfg.tls_cert !== !!cfg.tls_key)
-		die('API TLS requires both a certificate and a private key.');
+	let host = apiHost(cfg, lanAddress);
+	if (index(host, ':') >= 0)
+		host = '[' + host + ']';
+	return {
+		external_controller: host + ':' + port,
+		secret: apiSecret(),
+		access_control_allow_origin: apiOrigins(cfg, 'https://metacubex.github.io'),
+		access_control_allow_private_network: cfg.external === '1' ? true : null
+	};
+};
+
+export function nativeApi(uci, instance, lanAddress) {
+	const cfg = uci.get_all('homeproxy', 'observability') || {};
+	if (cfg.native_api !== '1')
+		return null;
+	const port = int(cfg['native_' + instance + '_port'] || (instance === 'client' ? '5336' : '5337'));
+	if (!(port >= 1 && port <= 65535))
+		die('Invalid sing-box gRPC API port.');
 	let tls;
-	if (external && cfg.tls_cert) {
-		const certificate = readfile(cfg.tls_cert), key = readfile(cfg.tls_key);
-		if (!certificate || !key) die('Unable to read API TLS certificate or private key.');
-		/* The generated configuration is private and owned by sing-box. Inline
-		 * PEM also works in ujail when the source key is root-only. */
+	if (cfg.native_tls_cert || cfg.native_tls_key) {
+		if (!cfg.native_tls_cert || !cfg.native_tls_key)
+			die('The sing-box gRPC API requires both a TLS certificate and a private key.');
+		const certificate = readfile(cfg.native_tls_cert), key = readfile(cfg.native_tls_key);
+		if (!certificate || !key) die('Unable to read the sing-box gRPC API TLS certificate or private key.');
+		// The generated config is private and PEM works inside ujail.
 		tls = { enabled: true, certificate: [certificate], key: [key] };
 	}
+	let dashboard = false;
+	if (cfg.external === '1' && cfg.native_dashboard === '1') {
+		const compat = json(readfile('/usr/share/homeproxy/compat.json'));
+		dashboard = {
+			enabled: true,
+			path: '/etc/homeproxy/dashboard/' + instance,
+			download_url: 'https://github.com/SagerNet/sing-box-dashboard/archive/' + compat.dashboard_commit + '.zip',
+			http_client: instance === 'client' ? 'hp-dashboard-http' : 'hp-direct-http'
+		};
+	}
 	return {
-		type: 'api', tag: 'homeproxy-api',
-		listen: external ? cfg.listen || lanAddress || '127.0.0.1' : '127.0.0.1',
-		listen_port: port,
-		secret,
-		access_control_allow_origin: external ? cfg.allowed_origins || [] : [],
-		dashboard: false,
+		type: 'api', tag: 'homeproxy-grpc',
+		listen: apiHost(cfg, lanAddress), listen_port: port,
+		secret: apiSecret(),
+		access_control_allow_origin: apiOrigins(cfg, 'https://sing-box-dashboard.sagernet.org'),
+		access_control_allow_private_network: cfg.external === '1' ? true : null,
+		dashboard,
 		tls
 	};
 };
@@ -61,8 +109,7 @@ export function httpClients(config) {
 };
 
 /* Translate the old family restriction into an explicit empty DNS response.
- * prefer_* ordering belongs to the global/dial resolver strategy in 1.14.
- * Keep a source identifier outside the strict core JSON for diagnostics. */
+ * prefer_* ordering belongs to the global/dial resolver strategy in 1.14. */
 export function dnsRule(rules, rule, strategy) {
 	if (strategy === 'ipv4_only' || strategy === 'ipv6_only') {
 		const matchRule = { ...rule };
@@ -75,28 +122,6 @@ export function dnsRule(rules, rule, strategy) {
 		});
 	}
 	push(rules, rule);
-};
-
-/* Only metadata is written here: never copy configuration values or credentials. */
-export function sourceMap(config, uci, filename, hints) {
-	const paths = {}, tags = {};
-	for (let path in keys(hints || {})) {
-		const section = hints[path];
-		paths[path] = { section, label: uci.get('homeproxy', section, 'label') || section };
-	}
-	for (let collection in ['inbounds', 'outbounds', 'endpoints', 'dns.servers', 'route.rule_set']) {
-		const parts = split(collection, '.');
-		const items = length(parts) === 1 ? config[parts[0]] : config[parts[0]]?.[parts[1]];
-		for (let i = 0; i < length(items || []); i++) {
-			const tag = items[i].tag, section = match(tag || '', /^cfg-(.+)-(out|in|dns|rule)$/)?.[1];
-			if (!section) continue;
-			const value = { section, label: uci.get('homeproxy', section, 'label') || section };
-			paths[collection + '[' + i + ']'] = value;
-			tags[tag] = value;
-		}
-	}
-	if (!writefile(filename, sprintf('%.J\n', { schema: 1, paths, tags })))
-		die('Unable to write HomeProxy configuration source map.');
 };
 
 export function certProviders(config) {

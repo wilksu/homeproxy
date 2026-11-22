@@ -12,3 +12,11 @@ if [ ! -s /etc/homeproxy/api.secret ]; then
 	trap - EXIT HUP INT TERM
 fi
 chmod 600 /etc/homeproxy/api.secret
+
+if [ "$(uci -q get homeproxy.observability.native_api)" = 1 ] &&
+   [ "$(uci -q get homeproxy.observability.external)" = 1 ] &&
+   [ "$(uci -q get homeproxy.observability.native_dashboard)" = 1 ]; then
+	mkdir -p /etc/homeproxy/dashboard
+	chmod 755 /etc/homeproxy/dashboard
+	chown sing-box:sing-box /etc/homeproxy/dashboard
+fi

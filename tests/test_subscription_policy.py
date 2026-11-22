@@ -4,11 +4,14 @@ from test_generator import ROOT,UCODE
 class ACLTests(unittest.TestCase):
  def test_update_requires_write_access(self):
   acl=json.loads((ROOT/'root/usr/share/rpcd/acl.d/luci-app-homeproxy.json').read_text())['luci-app-homeproxy']
-  for filename in ['update_subscriptions.uc','update_subscriptions_ui.sh']:
-   path='/etc/homeproxy/scripts/'+filename
-   self.assertNotIn('exec',acl['read']['file'].get(path,[]))
-   self.assertIn('exec',acl['write']['file'][path])
+  wrapper='/etc/homeproxy/scripts/update_subscriptions_ui.sh'
+  self.assertNotIn('exec',acl['read']['file'].get(wrapper,[]))
+  self.assertIn('exec',acl['write']['file'][wrapper])
+  self.assertNotIn('/etc/homeproxy/scripts/update_subscriptions.uc',acl['write']['file'])
+  self.assertNotIn('/etc/homeproxy/scripts/subscription-transaction.sh',acl['write']['file'])
   self.assertNotIn('api_control',acl['read']['ubus']['luci.homeproxy'])
+  self.assertNotIn('dashboard_launch',acl['read']['ubus']['luci.homeproxy'])
+  self.assertIn('dashboard_launch',acl['write']['ubus']['luci.homeproxy'])
 @unittest.skipUnless(UCODE,'UCODE required')
 class SubscriptionURLTests(unittest.TestCase):
  def test_existing_duplicate_urls_are_fetched_once(self):
@@ -40,7 +43,8 @@ class SubscriptionURLTests(unittest.TestCase):
     code='''const filter_mode=%s,filter_keywords=%s;
 const isEmpty=v=>v===null || v===undefined || v==="" || (type(v)==='array' && !length(v));
 %s
-print(filter_check(%s) ? '1' : '0');'''%(json.dumps(mode),json.dumps(keywords),body,json.dumps(name))
+const patterns = filter_mode === 'disabled' ? [] : map(filter_keywords, keyword => regexp(keyword));
+print(filter_check(%s, patterns) ? '1' : '0');'''%(json.dumps(mode),json.dumps(keywords),body,json.dumps(name))
     result=subprocess.run([UCODE,'-e',code],capture_output=True,text=True)
     self.assertEqual(result.returncode,0,result.stderr)
     self.assertEqual(result.stdout,'1' if expected else '0')
@@ -69,7 +73,7 @@ class RemoteEndpointTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    p=pathlib.Path(tmp);(p/'digest.uc').write_text("export function md5(v) { return 'fixture'; };")
    module=ROOT/'root/etc/homeproxy/scripts/node_import.uc'
-   payload={'outbounds':[{'tag':'group','type':'selector','outbounds':['block']},{'tag':'block','type':'block'}]}
+   payload={'outbounds':[{'tag':'group','type':'selector','outbounds':['dns']},{'tag':'dns','type':'dns'}]}
    code='import {importNodes} from '+json.dumps(str(module))+'; importNodes('+json.dumps(payload)+',"source");'
    r=subprocess.run([UCODE,'-L',str(p/'*.uc'),'-e',code],env={**os.environ,'HP_OUTPUT_DIR':tmp},capture_output=True,text=True)
    self.assertNotEqual(r.returncode,0);self.assertIn('Missing group member or detour',r.stderr)

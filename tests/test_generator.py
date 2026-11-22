@@ -9,11 +9,10 @@ CORE=os.environ.get('SING_BOX',shutil.which('sing-box') or '')
 BASE={
  'config':{'.type':'homeproxy','main_node':'node1','main_udp_node':'same','routing_mode':'global','proxy_mode':'redirect_tproxy','ipv6_support':'1','dns_server':'8.8.8.8','china_dns_server':'223.5.5.5'},
  'infra':{'.type':'homeproxy','ntp_server':'nil'},
- 'routing':{'.type':'homeproxy','default_outbound':'route1','default_outbound_dns':'default-dns'},
+ 'routing':{'.type':'homeproxy','default_outbound':'node1','default_outbound_dns':'default-dns'},
  'dns':{'.type':'homeproxy','default_server':'default-dns'},
  'observability':{'.type':'homeproxy','enabled':'0'},
  'node1':{'.type':'node','type':'socks','address':'192.0.2.1','port':'1080','socks_version':'5'},
- 'route1':{'.type':'routing_node','node':'node1','enabled':'1','label':'Fixture node'},
 }
 @unittest.skipUnless(UCODE and CORE,'UCODE and SING_BOX are required')
 class GeneratorTests(unittest.TestCase):
@@ -24,7 +23,9 @@ class GeneratorTests(unittest.TestCase):
    # Fixture validation handles only types used by this controlled config.
    s=s.replace("const ret = system(`/sbin/validate_data ${shellQuote(datatype)} ${shellQuote(data)} 2>/dev/null`);\n\treturn (ret === 0);", "if (datatype === 'ip4addr') return !!match(data, /^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$/);\n\tif (datatype === 'ip6addr') return index(data, ':') >= 0;\n\treturn true;")
    hp.write_text(s)
-   h=mods/'config114.uc';h.write_text(h.read_text().replace("'/etc/homeproxy/api.secret'",repr(str(tmp/'api.secret'))))
+   h=mods/'config114.uc';h.write_text(h.read_text()
+    .replace("'/etc/homeproxy/api.secret'",repr(str(tmp/'api.secret')))
+    .replace("'/usr/share/homeproxy/compat.json'",repr(str(ROOT/'root/usr/share/homeproxy/compat.json'))))
    (tmp/'api.secret').write_text('0'*64)
    (tmp/'resources').mkdir();(tmp/'resources/direct_list.txt').write_text('');(tmp/'resources/proxy_list.txt').write_text(proxy_domains)
    f=tmp/'uci.json';f.write_text(json.dumps(cfg));env={**os.environ,'HP_TEST_UCI':str(f),'HP_OUTPUT_DIR':str(tmp)}
@@ -34,9 +35,6 @@ class GeneratorTests(unittest.TestCase):
    p=subprocess.run([CORE,'check','-c',str(result)],capture_output=True,text=True)
    self.assertEqual(p.returncode,0,p.stderr)
    self.assertNotIn('deprecated',p.stderr.lower(),p.stderr)
-   sources=json.loads(result.with_suffix('.sources').read_text())
-   self.assertEqual(sources['schema'],1)
-   self.assertNotIn('test-password',json.dumps(sources))
    return json.loads(result.read_text())
  def test_proxy_and_routing_modes(self):
   for routing in ['global','gfwlist','bypass_mainland_china','proxy_mainland_china','custom']:
@@ -77,10 +75,10 @@ class GeneratorTests(unittest.TestCase):
  def test_custom_dangling_subscription_references(self):
   for kind in ['default','routing_rule','dns_server','ruleset','group','detour']:
    with self.subTest(kind=kind):
-    c=copy.deepcopy(BASE);c['config']['routing_mode']='custom';c.pop('route1');c['routing']['default_outbound']='direct-out'
+    c=copy.deepcopy(BASE);c['config']['routing_mode']='custom';c['routing']['default_outbound']='direct-out'
     if kind=='default':c['routing']['default_outbound']='gone'
     elif kind=='group':c['node1']={'.type':'node','type':'selector','group_nodes':['gone']};c['routing']['default_outbound']='node1'
-    elif kind=='detour':c['node1']['local_detour']='gone';c['routing']['default_outbound']='node1'
+    elif kind=='detour':c['node1']['node_detour']='gone';c['routing']['default_outbound']='node1'
     else:
      c['ref']={'.type':kind,'enabled':'1','outbound':'gone'}
      if kind=='dns_server':c['ref'].update(type='udp',server='192.0.2.2');c['dns']['default_server']='ref'
@@ -90,12 +88,43 @@ class GeneratorTests(unittest.TestCase):
      self.generate(c)
  def test_api(self):
   c=copy.deepcopy(BASE);c['observability']['enabled']='1';r=self.generate(c)
-  self.assertEqual(r['services'][0]['listen_port'],5334)
-  self.assertEqual(r['services'][0]['dashboard'],False)
-  self.assertEqual(r['services'][0]['listen'],'127.0.0.1')
+  api=r['experimental']['clash_api']
+  self.assertEqual(api['external_controller'],'127.0.0.1:5334')
+  self.assertEqual(api['secret'],'0'*64)
+  self.assertNotIn('access_control_allow_private_network',api)
   c['observability'].update(external='1',listen='192.0.2.2',allowed_origins=['https://dashboard.example'])
-  r=self.generate(c);self.assertEqual(r['services'][0]['listen'],'192.0.2.2')
-  self.assertEqual(r['services'][0]['access_control_allow_origin'],['https://dashboard.example'])
+  r=self.generate(c);api=r['experimental']['clash_api']
+  self.assertEqual(api['external_controller'],'192.0.2.2:5334')
+  self.assertEqual(api['access_control_allow_origin'],['https://dashboard.example'])
+  self.assertIs(api['access_control_allow_private_network'],True)
+ def test_native_api_and_clash_use_independent_listeners(self):
+  cfg=copy.deepcopy(BASE)
+  cfg['observability']['enabled']='1'
+  self.assertFalse(any(s['type']=='api' for s in self.generate(cfg).get('services',[])))
+  cfg['observability']['native_api']='1'
+  result=self.generate(cfg)
+  self.assertEqual(result['experimental']['clash_api']['external_controller'],'127.0.0.1:5334')
+  self.assertEqual(result['services'],[{'type':'api','tag':'homeproxy-grpc','listen':'127.0.0.1',
+   'listen_port':5336,'secret':'0'*64,'dashboard':False}])
+  cfg['observability'].update(external='1',listen='192.0.2.2',native_server_port='15337')
+  cfg['listener']={'.type':'server','enabled':'1','type':'mixed','address':'127.0.0.1','port':'16666'}
+  result=self.generate(cfg,'server')
+  self.assertEqual(result['experimental']['clash_api']['external_controller'],'192.0.2.2:5335')
+  native=result['services'][0]
+  self.assertEqual((native['listen'],native['listen_port']),('192.0.2.2',15337))
+  self.assertEqual(native['access_control_allow_origin'],['https://sing-box-dashboard.sagernet.org'])
+  self.assertIs(native['access_control_allow_private_network'],True)
+ def test_local_dashboard_uses_the_pinned_assets_and_client_outbound(self):
+  cfg=copy.deepcopy(BASE)
+  cfg['observability'].update(enabled='1',native_api='1',native_dashboard='1')
+  self.assertFalse(self.generate(cfg)['services'][0]['dashboard'])
+  cfg['observability'].update(external='1',listen='192.0.2.2')
+  result=self.generate(cfg)
+  dashboard=result['services'][0]['dashboard']
+  compat=json.loads((ROOT/'root/usr/share/homeproxy/compat.json').read_text())
+  self.assertEqual(dashboard['path'],'/etc/homeproxy/dashboard/client')
+  self.assertIn(compat['dashboard_commit']+'.zip',dashboard['download_url'])
+  self.assertIn({'tag':dashboard['http_client'],'detour':result['route']['final']},result['http_clients'])
  def test_dns_response_filter(self):
   c=copy.deepcopy(BASE);c['config']['routing_mode']='custom'
   c['dnsrule']={'.type':'dns_rule','enabled':'1','action':'route','server':'default-dns','ip_cidr':['192.0.2.0/24'],'domain_strategy':'ipv4_only'}
@@ -121,34 +150,29 @@ class GeneratorTests(unittest.TestCase):
     c=copy.deepcopy(BASE);c['server']={'.type':'homeproxy','enabled':'1'}
     c['listener']={'.type':'server','enabled':'1','type':protocol,'address':'127.0.0.1','port':'16666','uuid':'00000000-0000-4000-8000-000000000001','password':'test-password','username':'test','shadowsocks_encrypt_method':'aes-128-gcm'}
     if protocol in ['trojan','hysteria2','tuic','anytls']:
-     # No certificates are needed during configuration checks if ACME supplies them.
      c['listener'].update(tls='1',tls_acme='1',tls_acme_domain=['example.com'],tls_acme_email='test@example.com')
     if protocol=='vmess':c['listener']['vmess_alterid']='2'
     result=self.generate(c,'server')
     if protocol=='vmess':self.assertEqual(result['inbounds'][0]['users'][0]['alterId'],2)
  def test_tailscale_endpoint_and_direct_library_selection(self):
-  c=copy.deepcopy(BASE);c['config']['routing_mode']='custom';c['routing']['default_outbound']='node1';c.pop('route1')
+  c=copy.deepcopy(BASE);c['config']['routing_mode']='custom';c['routing']['default_outbound']='node1'
   c['node1']={'.type':'node','type':'tailscale','label':'Tailnet','tailscale_hostname':'hp-test','tailscale_accept_routes':'1','tailscale_advertise_routes':['192.0.2.0/24'],'tailscale_ssh_server':'1','tailscale_ssh_disable_sftp':'1'}
   r=self.generate(c);self.assertEqual(r['route']['final'],'cfg-node1-out');t=r['endpoints'][0]
   self.assertEqual(t['type'],'tailscale');self.assertTrue(t['accept_routes']);self.assertTrue(t['ssh_server']['disable_sftp']);self.assertEqual(t['advertise_routes'],['192.0.2.0/24'])
  def test_library_group_dependency_closure(self):
-  c=copy.deepcopy(BASE);c['config']['routing_mode']='custom';c['routing']['default_outbound']='group1';c.pop('route1')
+  c=copy.deepcopy(BASE);c['config']['routing_mode']='custom';c['routing']['default_outbound']='group1'
   c['group1']={'.type':'node','type':'selector','group_nodes':['auto1','node1'],'group_default':'auto1'}
   c['auto1']={'.type':'node','type':'urltest','group_nodes':['node1'],'group_interval':'300'}
   r=self.generate(c);out={o['tag']:o for o in r['outbounds']}
   self.assertEqual(out['cfg-group1-out']['outbounds'],['cfg-auto1-out','cfg-node1-out']);self.assertIn('cfg-node1-out',out)
- def test_reference_materializes_and_loads_upstream_in_both_modes(self):
+ def test_node_detour_loads_dependencies_in_both_modes(self):
   for mode in ['custom','global']:
    with self.subTest(mode=mode):
-    c=copy.deepcopy(BASE);c.pop('route1');c['config'].update(routing_mode=mode,main_node='variant')
-    c['routing']['default_outbound']='variant'
+    c=copy.deepcopy(BASE);c['config'].update(routing_mode=mode,main_node='node1')
+    c['routing']['default_outbound']='node1'
     c['upstream']={'.type':'node','type':'socks','address':'192.0.2.2','port':'1080','socks_version':'5'}
-    c['variant']={'.type':'node','node_mode':'reference','node_base':'node1','local_detour':'upstream','label':'Via upstream'}
-    r=self.generate(c);out={o['tag']:o for o in r['outbounds']};v=out['cfg-variant-out' if mode=='custom' else 'main-out']
+    c['node1']['node_detour']='upstream'
+    r=self.generate(c);out={o['tag']:o for o in r['outbounds']};v=out['cfg-node1-out' if mode=='custom' else 'main-out']
     self.assertEqual(v['type'],'socks');self.assertEqual(v['server'],'192.0.2.1');self.assertEqual(v['detour'],'cfg-upstream-out')
-    self.assertIn('cfg-upstream-out',out);self.assertNotIn('cfg-node1-out',out)
- def test_plain_main_node_detour_loads_dependencies(self):
-  c=copy.deepcopy(BASE);c['node1']['local_detour']='upstream'
-  c['upstream']={'.type':'node','type':'socks','address':'192.0.2.2','port':'1080','socks_version':'5'}
-  r=self.generate(c);self.assertTrue(any(o['tag']=='cfg-upstream-out' for o in r['outbounds']))
+    self.assertIn('cfg-upstream-out',out)
 if __name__=='__main__':unittest.main()

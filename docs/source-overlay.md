@@ -1,13 +1,42 @@
-# 当前源码挂载
+# ImmortalWrt 开发容器
 
-当前 `compose.yaml` 在原版 HomeProxy + 官方 1.14.0 核心快照上，只读挂载 HomeProxy 页面、公共 JS、脚本目录、启停脚本、菜单、ACL、RPC 模块、API CGI 和版本清单。没有覆盖整个 /www、/etc 或 /usr/share。
+开发环境使用 ImmortalWrt 25.12.0 x86/64 和 sing-box 1.14.0。Compose 只读挂载当前 HomeProxy 源码，`/etc/config` 和 `/etc/homeproxy` 使用该 Compose 项目的独立数据卷。启动会按 Compose 的地址配置容器 WAN，补齐 curl、dig 和 OpenSSL，迁移容器内的 HomeProxy 配置，并刷新 LuCI 和 RPC 缓存。
 
-`/etc/config`、`/etc/homeproxy` 继续使用原数据卷；只有后者的 scripts 子目录被源码挂载覆盖。挂载前的配置备份及旧 Compose 在 `.dev/before-source-mount/`。首次接入执行了带备份的 1.14 配置迁移；没有将仓库默认 UCI 覆盖到现有配置。
+## 从另一台机器恢复
 
-Compose 的 post_start 调用 `dev/setup-mounted.sh`：等待 rpcd、补齐 curl/bind-dig、准备密钥、执行幂等迁移、清缓存并重启 rpcd/uhttpd。没有编译任务，也不启动代理进程。官方 Dashboard 资源现已通过 `.dev/assets/dashboard` 只读挂载到 `/usr/share/homeproxy/dashboard`，访问地址为 http://127.0.0.1:8081/dashboard/ 。
+复制 `.dev/core-1.14/image.tar`、同目录的 `manifest.json` 和 `.dev/root-password`。镜像带有原来设置的 LuCI 账号，密码文件供本地登录使用。已有节点或订阅备份可以单独留存，空白开发容器只需要镜像和源码。
 
-验证结果：容器 healthy，登录和 client/node/observability/api-settings 路由返回 HTTP 200，服务端实际提供的 JS 与工作区文件哈希一致，runtime RPC 返回 1.14.0。后续已通过独立临时浏览器验证观测页、窄屏和键盘导航，可在 http://127.0.0.1:8080 查看。
+使用 Docker Compose 2.30 或更高版本，在仓库根目录运行：
 
-目录挂载下的页面修改通常刷新浏览器即可。RPC 修改后重启 rpcd；菜单变更需清 LuCI 缓存。单文件 bind mount 若遇到编辑器原子替换文件，可能仍指向旧 inode，需要 `docker compose up -d --no-build --force-recreate --wait` 重新挂载。翻译仍使用原版安装包中的语言资源，本轮没有编译新的语言文件。
+```sh
+scripts/dev.sh up
+scripts/dev.sh status
+```
 
-后续已按用户授权配置并启动真实订阅节点；当前运行与容器权限调整见 [节点验证记录](selected-node-validation.md)。本页前述“没有代理进程”仅描述最初挂载时的状态。
+本地缺少镜像时，脚本用 Python 3.11 或更高版本校验归档并导入镜像。第一次初始化需要能够访问镜像里的 ImmortalWrt 软件包镜像站。默认 LuCI 地址是 `http://127.0.0.1:8080`，用户名为 `root`。
+
+脚本显式读取 `compose.yaml`。要临时使用另一份本地 Compose 配置，设置 `HP_DEV_COMPOSE_OVERRIDE` 为该文件路径。恢复副本应使用独立项目名、网段、容器地址和宿主机端口。
+
+本机 Podman 验证使用本地文件 `.dev/compose.podman.yaml`，项目名 `homeproxy-dev`，LuCI 地址 `http://127.0.0.1:18080`。该文件同时设置了独立数据卷、网段和本机端口，以及本机 Podman 的运行兼容参数。使用已经启动的用户级 Podman 接口时：
+
+```sh
+export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
+export HP_DEV_COMPOSE_OVERRIDE=.dev/compose.podman.yaml
+scripts/dev.sh up
+scripts/dev.sh status
+```
+
+## 验证和日常开发
+
+```sh
+scripts/dev.sh smoke   # 在空闲容器里启动两个本机直连出站和一个可切换分组
+scripts/dev.sh shell   # 进入容器
+scripts/dev.sh logs    # 查看容器日志
+scripts/dev.sh stop   # 停止容器并保留数据卷
+```
+
+`smoke` 在容器已有 HomeProxy 实例时退出。测试实例的 Mixed 和 Clash API 监听容器回环地址，可在 LuCI 观测页验证分组、连接和日志，容器防火墙无须接管流量。
+
+页面目录挂载后，修改页面通常刷新浏览器即可。RPC 改动可在容器内重启 `rpcd`。编辑器原子替换单文件后，重新创建容器可让单文件挂载指向新版本，命名卷会继续使用。
+
+`scripts/dev.sh down` 删除该项目的容器和网络并保留数据卷。旧配置升级应使用备份的副本验证。透明代理、TUN 和实体路由器上的进程隔离需要对应的宿主机或设备环境。

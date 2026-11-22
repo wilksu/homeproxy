@@ -8,13 +8,25 @@ const core = '/usr/bin/sing-box';
 const pipe = popen(core + ' version');
 const version = pipe ? pipe.read('all') : '';
 if (pipe) pipe.close();
-if (match(version, /^sing-box version ([^\n]+)/)?.[1] !== compat.core_version)
-	die('HomeProxy requires sing-box ' + compat.core_version + '; installed: ' + split(version, '\n')[0]);
+const actual = match(version, /^sing-box version ([0-9]+\.[0-9]+\.[0-9]+)(\+[^\n]+)?(\n|$)/)?.[1];
+const prefix = join('.', slice(split(compat.core_version, '.'), 0, 2)) + '.';
+if (!actual || index(actual, prefix) !== 0)
+	die('HomeProxy requires sing-box ' + prefix + 'x; installed: ' + split(version, '\n')[0]);
 
+function parseController(addr) {
+	const m = match(addr || '', /^(\[([^\]]+)\]|([^:]*)):([0-9]+)$/);
+	if (!m) return null;
+	return { type: 'api', tag: 'clash-api', listen: m[2] || m[3] || '::', listen_port: int(m[4]) };
+}
+
+const hasTags = match(version, /(^|\n)Tags: /);
 const listeners = [];
 for (let filename in ARGV) {
 	const config = json(readfile(filename));
-	for (let listener in [...(config.inbounds || []), ...(config.services || [])]) {
+	const controller = parseController(config.experimental?.clash_api?.external_controller);
+	if (config.experimental?.clash_api && hasTags && index(version, 'with_clash_api') < 0)
+		die('clash-api: core build lacks with_clash_api');
+	for (let listener in [...(config.inbounds || []), ...(config.services || []), ...(controller ? [controller] : [])]) {
 		if (!listener.listen_port || listener.network === 'udp') continue;
 		for (let other in listeners) {
 			if (listener.type !== 'api' && other.type !== 'api') continue;

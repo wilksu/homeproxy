@@ -4255,3 +4255,227 @@ msgstr ""
 
 msgid "Expecting a valid HTTP Host, optionally including a port."
 msgstr ""
+
+#: observability.js
+msgid "Connection data unavailable"
+msgstr ""
+
+#: observability.js
+msgid "Core log"
+msgstr ""
+
+#: observability.js
+msgid "Current active connections"
+msgstr ""
+
+#: observability.js
+msgid "Display paused."
+msgstr ""
+
+#: observability.js
+msgid "Duration"
+msgstr ""
+
+#: observability.js
+msgid "Failed"
+msgstr ""
+
+#: observability.js
+msgid "HomeProxy log"
+msgstr ""
+
+#: observability.js
+msgid "Latency test completed."
+msgstr ""
+
+#: observability.js
+msgid "Loading…"
+msgstr ""
+
+#: observability.js
+msgid "Log source"
+msgstr ""
+
+#: observability.js
+msgid "Main UDP outbound"
+msgstr ""
+
+#: observability.js
+msgid "Main outbound"
+msgstr ""
+
+#: observability.js
+msgid "No closed connections recorded on this page yet."
+msgstr ""
+
+#: observability.js
+msgid "No connections have been reported by this core."
+msgstr ""
+
+#: observability.js
+msgid "Rule"
+msgstr ""
+
+#: observability.js
+msgid "The paired core must be running with Clash API enabled. Check API settings and the HomeProxy log."
+msgstr ""
+
+#: observability.js
+msgid "This closes all active connections in the selected core instance."
+msgstr ""
+
+#: observability.js
+msgid "Total"
+msgstr ""
+
+#: observability.js
+msgid "Total: —"
+msgstr ""
+
+#: observability.js
+msgid "Traffic"
+msgstr ""
+
+#: observability.js
+msgid "Unable to clean log."
+msgstr ""
+
+#: observability.js
+msgid "lines"
+msgstr ""
+
+#: observe-settings.js
+msgid "Enter trusted Dashboard origins, for example https://metacubex.github.io. Browser HTTPS and local-network permissions still apply."
+msgstr ""
+
+#: observe-settings.js
+msgid "Local monitoring uses an internal Clash API automatically. Applying connection settings restarts HomeProxy."
+msgstr ""
+
+#: observe-settings.js
+msgid "Enable sing-box gRPC API"
+msgstr ""
+
+#: observe-settings.js
+msgid "Allows the official sing-box clients and Dashboard to connect directly with the API secret."
+msgstr ""
+
+#: observe-settings.js
+msgid "sing-box gRPC address"
+msgstr ""
+
+#: observe-settings.js
+msgid "The address appears after applying settings and starting this instance."
+msgstr ""
+
+#: observe-settings.js
+msgid "Open official sing-box Dashboard"
+msgstr ""
+
+#: observe-settings.js
+msgid "Allow LAN API access"
+msgstr ""
+
+#: observe-settings.js
+msgid "Enabled APIs listen on the LAN address. The default listen address is 127.0.0.1."
+msgstr ""
+
+#: observe-settings.js
+msgid "Enter trusted Dashboard origins. The default origins are MetaCubeXD for Clash and the official sing-box Dashboard for gRPC."
+msgstr ""
+
+#: observe-settings.js
+msgid "Client gRPC port"
+msgstr ""
+
+#: observe-settings.js
+msgid "Server gRPC port"
+msgstr ""
+
+#: observe-settings.js
+msgid "API ports must be distinct."
+msgstr ""
+
+#: observe-settings.js
+msgid "gRPC TLS certificate path"
+msgstr ""
+
+#: observe-settings.js
+msgid "gRPC TLS private key path"
+msgstr ""
+
+#: observe-settings.js
+msgid "Client log level"
+msgstr ""
+
+#: observe-settings.js
+msgid "Server log level"
+msgstr ""
+
+#: observe-settings.js
+msgid "Info records core startup and connection activity. Warn records warnings and errors."
+msgstr ""
+
+#: observability.js
+msgid "Unable to read the current connections."
+msgstr ""
+
+#: observability.js
+msgid "No active connections. Traffic through this instance appears here while the connection is open."
+msgstr ""
+
+#: observability.js
+msgid "Core log level"
+msgstr ""
+
+#: observability.js
+msgid "Unable to read the log."
+msgstr ""
+
+#: observability.js
+msgid "Default route"
+msgstr ""
+
+#: observe-settings.js
+msgid "Serve the official Dashboard locally"
+msgstr ""
+
+#: observe-settings.js
+msgid "Open the Dashboard directly from LuCI using this instance’s connection settings."
+msgstr ""
+
+#: observe-settings.js
+msgid "Open sing-box Dashboard"
+msgstr ""
+
+#: observe-settings.js
+msgid "Unable to open the sing-box Dashboard."
+msgstr ""
+
+#: observability.js
+msgid "connection"
+msgstr ""
+
+#: observability.js
+msgid "line"
+msgstr ""
+
+#: observability.js
+msgid "Unavailable"
+msgstr ""
+
+#: node.js
+msgid "Connect to this proxy through the selected outbound."
+msgstr ""
+
+#: node.js
+msgid "Server address resolver"
+msgstr ""
+
+#: node.js
+msgid "Server address strategy"
+msgstr ""
+
+#: node.js
+msgid "Used for a direct connection to the proxy server. Dial fields such as interface binding are ignored when an upstream is set."
+msgstr ""

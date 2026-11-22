@@ -83,7 +83,7 @@ printf('%%J', map(json(readfile(%s)), input => {
             self.assertEqual(result['node']['ws_host'], ['example.test:8443', '[2001:db8::1]:443'])
         result, = self.convert([{'type': 'vless', 'transport': {'type': 'ws',
                                 'headers': {'Host': 'example.test', 'X-Unsupported': 'x'}}}])
-        self.assertIn('headers other than Host', result.get('error', ''))
+        self.assertEqual(result['node']['ws_host'], ['example.test'])
 
     def test_utls_disabled_defaults_and_aliases(self):
         cases = [({}, None), ({'enabled': None}, None), ({'enabled': False}, None),
@@ -112,8 +112,9 @@ printf('%%J', map(json(readfile(%s)), input => {
             self.assertEqual(result, {'node': {'type': input_['type'], **expected}})
 
     def test_unrepresentable_fields_fail_instead_of_silently_disappearing(self):
-        cases = [({'type': 'socks', 'unknown_field': 'x'}, 'not supported'),
-                 ({'type': 'tailscale'}, 'configured locally'),
+        ok, = self.convert([{'type': 'socks', 'unknown_field': 'x'}])
+        self.assertEqual(ok, {'node': {'type': 'socks'}})
+        cases = [({'type': 'tailscale'}, 'configured locally'),
                  ({'type': 'unsupported'}, 'Unsupported node type'),
                  ({'type': 'socks', 'password': {}}, 'scalar'),
                  ({'type': 'socks', 'domain_resolver': 'remote-dns'}, 'resolver dependency')]

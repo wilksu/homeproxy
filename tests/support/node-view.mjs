@@ -30,7 +30,7 @@ export function loadNodeHelpers(deps = {}) {
 			values[index] = deps[name];
 	});
 
-	const load = new Function(...names, `${body}\nreturn { nodeReferences, subscriptionMatchesNode, isSubscriptionNode, subscriptionNodeIDs, validateSubscriptionURLs, applySubscriptionURLChange, rollbackSubscriptionWrite, queueSubscriptionURLChange, configureSubscriptionURLWrites, saveNodeMap, removeNode, indexMapFieldsDuringDependencyCheck };`);
+	const load = new Function(...names, `${body}\nreturn { nodeReferences, subscriptionMatchesNode, isSubscriptionNode, subscriptionNodeIDs, validateSubscriptionURLs, removeNode, indexMapFieldsDuringDependencyCheck };`);
 	return load(...values);
 }
 

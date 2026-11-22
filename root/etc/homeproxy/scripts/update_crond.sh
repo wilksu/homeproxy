@@ -11,4 +11,4 @@ for i in "china_ip4" "china_ip6" "gfw_list" "china_list"; do
 	if "$SCRIPTS_DIR"/update_resources.sh "$i"; then resources_changed=1; fi
 done
 
-HP_RESOURCES_CHANGED="$resources_changed" "$SCRIPTS_DIR"/update_subscriptions.uc
+HP_RESOURCES_CHANGED="$resources_changed" /bin/sh "$SCRIPTS_DIR"/subscription-transaction.sh

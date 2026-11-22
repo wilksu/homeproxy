@@ -14,8 +14,8 @@
 'require homeproxy as hp';
 'require tools.widgets as widgets';
 
-function runSubscriptionUpdate(source) {
- return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions_ui.sh', source ? [source] : [], 'json').then(result => {
+function runSubscriptionUpdate(hash) {
+ return fs.exec_direct('/etc/homeproxy/scripts/update_subscriptions_ui.sh', hash ? [hash] : [], 'json').then(result => {
   if (result?.code !== 0)
    throw new Error(_('Subscription update failed. Check the HomeProxy log for details.'));
  });
@@ -26,7 +26,7 @@ function nodeReferences(sections, deleted) {
  const removing = new Set(deleted);
  const fields = {
   homeproxy: ['main_node','main_udp_node','main_urltest_nodes','main_udp_urltest_nodes','default_outbound'],
-  node: ['group_nodes','group_default','node_detour','local_detour','node_base'],
+  node: ['group_nodes','group_default','node_detour'],
   routing_node: ['node','outbound','urltest_nodes'],
   routing_rule: ['outbound'], dns_server: ['outbound'], dns_rule: ['outbound'], ruleset: ['outbound']
  };
@@ -44,9 +44,7 @@ function nodeReferences(sections, deleted) {
 }
 
 function subscriptionMatchesNode(uciConfig, section_id, info) {
-	const sourceID = uci.get(uciConfig, section_id, 'source_id');
-	return sourceID ? !!info.id && info.id === sourceID :
-		!!info.hash && info.hash === uci.get(uciConfig, section_id, 'grouphash');
+	return !!info.hash && info.hash === uci.get(uciConfig, section_id, 'grouphash');
 }
 
 function isSubscriptionNode(uciConfig, section_id, subscriptions) {
@@ -55,7 +53,7 @@ function isSubscriptionNode(uciConfig, section_id, subscriptions) {
 
 function subscriptionNodeIDs(sections) {
 	return sections
-		.filter(section => section['.type'] === 'node' && (section.source_id || section.grouphash))
+		.filter(section => section['.type'] === 'node' && section.grouphash)
 		.map(section => section['.name']);
 }
 
@@ -78,130 +76,6 @@ function validateSubscriptionURLs(values) {
 		seen.add(clean);
 	}
 	return null;
-}
-
-function applySubscriptionURLChange(uciConfig, section_id, values, calcHash) {
-	const clean = value => String(value || '').replace(/#.*$/, '');
-	const list = value => Array.isArray(value) ? value : (value ? [value] : []);
-	const previousValues = list(uci.get(uciConfig, section_id, 'subscription_url'));
-	const nextValues = list(values);
-	const previous = previousValues.map(clean);
-	const next = nextValues.map(clean);
-	const removed = [...new Set(previous.filter(url => !next.includes(url)))];
-	const added = [...new Set(next.filter(url => !previous.includes(url)))];
-
-	/* A single URL replacement is the established token-rotation operation:
-	 * retain the source identity and its nodes until the replacement is fetched. */
-	if (previous.length === 1 && next.length === 1 && removed.length === 1 && added.length === 1) {
-		const replacedSources = new Set();
-		uci.sections(uciConfig, 'subscription_source', source => {
-			if (clean(source.url) === removed[0]) {
-				replacedSources.add(source['.name']);
-				uci.set(uciConfig, source['.name'], 'url', added[0]);
-			}
-		});
-		const oldHash = calcHash(removed[0]);
-		const newHash = calcHash(added[0]);
-		uci.sections(uciConfig, 'node', node => {
-			if (node.source_id ? replacedSources.has(node.source_id) : node.grouphash === oldHash)
-				uci.set(uciConfig, node['.name'], 'grouphash', newHash);
-		});
-		uci.set(uciConfig, section_id, 'subscription_url', nextValues);
-		return { changed: true, replaced: true, removedNodes: [], removedSources: [], references: [] };
-	}
-
-	const sections = uci.sections(uciConfig);
-	const removedURLs = new Set(removed);
-	const removedHashes = new Set(removed.map(calcHash));
-	const removedSources = sections
-		.filter(source => source['.type'] === 'subscription_source' && removedURLs.has(clean(source.url)))
-		.map(source => source['.name']);
-	const sourceIDs = new Set(removedSources);
-	const removedNodes = sections
-		.filter(node => node['.type'] === 'node' &&
-			(node.source_id ? sourceIDs.has(node.source_id) : removedHashes.has(node.grouphash)))
-		.map(node => node['.name']);
-	const references = nodeReferences(sections, removedNodes);
-
-	if (references.length)
-		return { changed: false, replaced: false, removedNodes, removedSources, references };
-
-	for (const id of removedNodes)
-		uci.remove(uciConfig, id);
-	for (const id of removedSources)
-		uci.remove(uciConfig, id);
-	if (nextValues.length)
-		uci.set(uciConfig, section_id, 'subscription_url', nextValues);
-	else
-		uci.unset(uciConfig, section_id, 'subscription_url');
-	return { changed: true, replaced: false, removedNodes, removedSources, references: [] };
-}
-
-function rollbackSubscriptionWrite(map, error) {
-	if (!map.subscriptionWritePending)
-		return Promise.reject(error);
-
-	map.subscriptionWritePending = false;
-	map.data.unload(map.config);
-	return map.data.load(map.config)
-		.then(() => map.reset())
-		.then(() => { throw error; });
-}
-
-function queueSubscriptionURLChange(map, option, section, values) {
-	if (Array.isArray(values) && !values.length &&
-		!(uci.get(map.config, section, 'subscription_url') || []).length)
-		return;
-	map.pendingSubscriptionURLChange = { section, values, option };
-}
-
-function configureSubscriptionURLWrites(option) {
-	option.write = function(section, values) {
-		queueSubscriptionURLChange(this.map, this, section, values);
-	};
-	option.remove = function(section) {
-		queueSubscriptionURLChange(this.map, this, section, []);
-	};
-}
-
-function saveNodeMap(map, mapSave, uciConfig, cb, silent, calcHash) {
-	map.pendingSubscriptionURLChange = null;
-	return mapSave.call(map, () => {
-		const pending = map.pendingSubscriptionURLChange;
-		if (pending) {
-			const { section, values, option } = pending;
-			const previousValues = uci.get(uciConfig, section, 'subscription_url') || [];
-			const problem = validateSubscriptionURLs(values);
-			let message;
-			if (problem)
-				message = problem.code === 'duplicate'
-					? _('Subscription URLs must be unique; changing the fragment does not create a new source.')
-					: _('Expecting: %s').format(_('valid HTTP or HTTPS URL'));
-			else {
-				const result = applySubscriptionURLChange(uciConfig, section, values, calcHash);
-				if (!result.changed)
-					message = _('These nodes are still referenced. Update these settings before removing the subscription:') +
-						' ' + result.references.join('; ');
-				else
-					map.subscriptionWritePending = true;
-			}
-			if (message) {
-				option.getUIElement(section)?.setValue(previousValues);
-				ui.addNotification(null, E('p', {}, message), 'error');
-				const error = new Error(message);
-				error.subscriptionURLRejected = true;
-				return Promise.reject(error);
-			}
-		}
-		return typeof cb === 'function' ? cb() : undefined;
-	}, silent).then(result => {
-		map.subscriptionWritePending = false;
-		map.pendingSubscriptionURLChange = null;
-		return result;
-	}, error => {
-		map.pendingSubscriptionURLChange = null;
-		return rollbackSubscriptionWrite(map, error);
-	});
 }
 
 function removeNode(section_id, ev) {
@@ -270,16 +144,12 @@ function allowInsecureConfirm(ev, _section_id, value) {
 }
 
 function buildNodeLabels(config) {
-	const subscriptions = hp.getSubscriptionInfo(config);
-	const byID = Object.create(null), byHash = Object.create(null);
-	for (const source of subscriptions) {
-		if (source.id)
-			byID[source.id] = source;
+	const byHash = Object.create(null);
+	for (const source of hp.getSubscriptionInfo(config))
 		byHash[source.hash] = source;
-	}
 	const candidates = Object.create(null), counts = Object.create(null);
 	uci.sections(config, 'node', n => {
-		const source = n.source_id ? byID[n.source_id] : byHash[n.grouphash];
+		const source = byHash[n.grouphash];
 		const sourceTitle = source?.title && (source.configured ? source.title : _('Removed') + ' · ' + source.title);
 		const value = (n.label || n['.name']) + (sourceTitle ? ' — ' + sourceTitle : '');
 		candidates[n['.name']] = value;
@@ -335,29 +205,16 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 		const current=this.section;
 		// Each validation reads the current form and UCI state. Share completed
 		// work within this call only; later edits must create fresh caches.
-		const resolved=new Map(), validated=new Set();
+		const validated=new Set();
 		const get=(id,key)=>{
 			if(id===sid){const option=current.children.find(o=>o.option===key);const value=option?.formvalue(sid);if(value!==null && value!==undefined)return value;}
 			return uci.get(data[0],id,key);
 		};
-		function effective(id,path=[]){
-			if(path.includes(id))throw new Error(_('Circular node dependency: %s').format([...path,id].map(nodeName).join(' → ')));
-			if(resolved.has(id))return resolved.get(id);
-			if(id!==sid && !uci.get(data[0],id))throw new Error(_('Missing node (%s)').format(id));
-			let result={type:get(id,'type'),detour:get(id,'node_detour'),members:get(id,'group_nodes') || [],default:get(id,'group_default')};
-			if(get(id,'node_mode')==='reference'){
-				const base=get(id,'node_base');if(!base)throw new Error(_('Select a base node.'));
-				result=effective(base,[...path,id]);
-				if(['selector','urltest','tailscale','wireguard'].includes(result.type))throw new Error(_('Choose a proxy node as the base, not a group or endpoint.'));
-			}
-			const override=get(id,'local_detour');if(override)result={...result,detour:override==='_direct'?null:override};
-			resolved.set(id,result);
-			return result;
-		}
 		function visit(id,path=[]){
 			if(path.includes(id))throw new Error(_('Circular node dependency: %s').format([...path,id].map(nodeName).join(' → ')));
 			if(validated.has(id))return;
-			const n=effective(id);
+			if(id!==sid && !uci.get(data[0],id))throw new Error(_('Missing node (%s)').format(id));
+			const n={type:get(id,'type'),detour:get(id,'node_detour'),members:get(id,'group_nodes') || [],default:get(id,'group_default')};
 			if(['selector','urltest'].includes(n.type)){
 				if(!n.members.length)throw new Error(_('Group must contain at least one member.'));
 				if(n.default && !n.members.includes(n.default))throw new Error(_('Default must be a group member.'));
@@ -367,70 +224,9 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 		}
 		try{visit(sid);return true;}catch(e){return e.message;}
 	}
-	o=s.option(form.ListValue,'node_mode',_('Creation method'));
-	o.value('manual',_('Configure directly'));o.value('reference',_('Reference an existing node'));o.default='manual';o.rmempty=false;
-	o.renderWidget=function(sid,index,value){
-		if(uci.get(data[0],sid,'grouphash')){this.keylist=['manual'];this.vallist=[_('Configure directly')];}
-		else {this.keylist=['manual','reference'];this.vallist=[_('Configure directly'),_('Reference an existing node')];}
-		return form.ListValue.prototype.renderWidget.call(this,sid,index,value);
-	};
-	o.onchange=function(ev,sid,mode){
-		const base=this.section.children.find(f=>f.option==='node_base')?.formvalue(sid);
-		const info=document.getElementById('hp-base-info-'+sid);if(info)info.textContent=baseInfo(base);
-		const upstream=document.getElementById('hp-original-upstream-'+sid);
-		if(upstream)upstream.textContent=mode==='reference'?inheritedUpstream(base):uci.get(data[0],sid,'node_detour')?nodeName(uci.get(data[0],sid,'node_detour')):_('Connect directly');
-	};
-	o=s.option(hp.CBILazyListValue,'node_base',_('Base node'),_('Inherit server, authentication, TLS and transport settings. Local overrides are kept separately.'));
-	o.depends('node_mode','reference');o.rmempty=false;
-	o.load=function(sid){
-		this.keylist=[];this.vallist=[];this.lazyChoices={};this.value('',_('Select a base node.'));
-		uci.sections(data[0],'node',n=>{if(n['.name']!==sid && !['selector','urltest','tailscale','wireguard'].includes(n.type)){const label=nodeName(n['.name']);this.value(n['.name'],label);this.lazyChoices[n['.name']]=label;}});
-		return this.super('load',sid);
-	};
-	o.validate=nodeValidation;
-	o.onchange=(ev,sid,id)=>{const target=document.getElementById('hp-base-info-'+sid);if(target)target.textContent=baseInfo(id);const upstream=document.getElementById('hp-original-upstream-'+sid);if(upstream)upstream.textContent=inheritedUpstream(id);};
-	function inheritedUpstream(id,seen=[]){
-		if(!id)return _('Select a base node.');
-		if(seen.includes(id))return _('Circular node dependency: %s').format(nodeName(id));
-		const n=uci.get(data[0],id);if(!n)return _('Missing node (%s)').format(id);
-		if(n.local_detour)return n.local_detour==='_direct'?_('Connect directly'):nodeName(n.local_detour);
-		if(n.node_mode==='reference')return inheritedUpstream(n.node_base,[...seen,id]);
-		return n.node_detour?nodeName(n.node_detour):_('Connect directly');
-	}
-	function baseInfo(id,seen=[]){
-		if(!id)return _('Select a base node.');
-		if(seen.includes(id))return _('Circular node dependency: %s').format(nodeName(id));
-		const n=uci.get(data[0],id);if(!n)return _('Missing node (%s)').format(id);
-		if(n.node_mode==='reference')return baseInfo(n.node_base,[...seen,id]);
-		return (n.type || '—')+' · '+(n.address || '—')+(n.port?':'+n.port:'');
-	}
-	o=s.option(form.DummyValue,'_base_info',_('Inherited configuration'));
-	o.depends('node_mode','reference');
-	o.description=_('Protocol-specific fields follow the base node. Edit that node to change them; this entry only overrides how it is reached.');
-	o.renderWidget=(sid)=>E('span',{id:'hp-base-info-'+sid},baseInfo(uci.get(data[0],sid,'node_base')));
-	o=s.option(hp.CBILazyListValue,'local_detour',_('Upstream outbound'),_('Connect to this proxy through the selected outbound. An empty override inherits the original setting; direct connection clears an inherited upstream.'));
-	o.value('',_('Inherit original setting'));o.value('_direct',_('Connect directly'));
-	o.load=function(sid){
-		this.keylist=[];this.vallist=[];this.lazyChoices={};this.value('',_('Inherit original setting'));this.value('_direct',_('Connect directly'));
-		uci.sections(data[0],'node',n=>{if(n['.name']!==sid){const label=nodeName(n['.name']);this.value(n['.name'],label);this.lazyChoices[n['.name']]=label;}});
-		return this.super('load',sid);
-	};
-	o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});o.validate=nodeValidation;o.retain=true;
-	o=s.option(form.DummyValue,'_upstream_original',_('Original upstream'));
-	o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
-	o.renderWidget=sid=>{const n=uci.get(data[0],sid) || {};return E('span',{id:'hp-original-upstream-'+sid},n.node_mode==='reference'?inheritedUpstream(n.node_base):n.node_detour?nodeName(n.node_detour):_('Connect directly'));};
-	o=s.option(widgets.DeviceSelect,'local_bind_interface',_('Override interface'),_('Used for a direct connection to the proxy server. Leave empty to inherit. Dial fields such as interface binding are ignored when an upstream is set.'));
-	o.multiple=false;o.noaliases=true;o.retain=true;o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
-	o=s.option(form.ListValue,'local_domain_resolver',_('Override server address resolver'),_('Custom DNS servers are available only in custom routing mode. An unavailable resolver prevents applying the configuration.'));
-	o.value('',_('Inherit original setting'));o.value('_default',_('Use routing default'));o.value('default-dns',_('Default DNS (issued by WAN)'));o.value('system-dns',_('System DNS'));
-	if(routing_mode==='custom')uci.sections(data[0],'dns_server',n=>{if(n.enabled==='1')o.value(n['.name'],n.label || n['.name']);});
-	o.retain=true;o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
-	o=s.option(form.ListValue,'local_domain_strategy',_('Override address strategy'));
-	o.value('',_('Inherit original setting'));o.value('_default',_('Use routing default'));for(const key in hp.dns_strategy)if(key)o.value(key,hp.dns_strategy[key]);
-	o.retain=true;o.depends('node_mode','reference');o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
 	o = s.option(form.ListValue, 'type', _('Type'));
-	o.textvalue=function(sid){return uci.get(data[0],sid,'node_mode')==='reference'?_('Reference'):form.ListValue.prototype.textvalue.call(this,sid);};
 	o.value('direct', _('Direct'));
+	o.value('block', _('Block'));
 	o.value('anytls', _('AnyTLS'));
 	o.value('http', _('HTTP'));
 	if (features.with_quic) {
@@ -455,12 +251,12 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 
 	o = s.option(form.Value, 'address', _('Address'));
 	o.datatype = 'host';
-	o.depends({type:/^(?!direct$|tailscale$|selector$|urltest$).+/});
+	o.depends({type:/^(?!block$|direct$|tailscale$|selector$|urltest$).+/});
 	o.rmempty = false;
 
 	o = s.option(form.Value, 'port', _('Port'));
 	o.datatype = 'port';
-	o.depends({type:/^(?!direct$|tailscale$|selector$|urltest$).+/});
+	o.depends({type:/^(?!block$|direct$|tailscale$|selector$|urltest$).+/});
 	o.rmempty = false;
 
 	o = s.option(form.Value, 'username', _('Username'));
@@ -1193,12 +989,15 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 
 	/* Extra settings start */
 	o = s.option(form.Flag, 'tcp_fast_open', _('TCP fast open'));
+	o.depends({ type: /^(?!selector$|urltest$).+/ });
 
 	o = s.option(form.Flag, 'tcp_multi_path', _('MultiPath TCP'));
+	o.depends({ type: /^(?!selector$|urltest$).+/ });
 
 	o = s.option(form.Flag, 'udp_fragment', _('UDP Fragment'),
 		_('Enable UDP fragmentation.'));
 	o.rmempty = false;
+	o.depends({ type: /^(?!selector$|urltest$).+/ });
 	o.cfgvalue = function(sid) {
 		return uci.get(data[0], sid, this.option) ??
 			(['direct', 'hysteria', 'hysteria2', 'tuic'].includes(uci.get(data[0], sid, 'type')) ? '1' : '0');
@@ -1215,41 +1014,77 @@ function renderNodeSettings(section, data, features, main_node, routing_mode, no
 	o.default = '2';
 	o.depends('udp_over_tcp', '1');
 	/* Extra settings end */
-	// Direct configuration starts with protocol fields. Dial overrides are advanced.
-	o=s.option(form.Flag,'_dial_advanced',_('Advanced connection settings'));
-	o.default='0';o.depends({node_mode:'manual',type:/^(?!selector$|urltest$|tailscale$|wireguard$).+/});
-	o.cfgvalue=sid=>['local_detour','local_bind_interface','local_domain_resolver','local_domain_strategy'].some(k=>uci.get(data[0],sid,k))?'1':'0';
-	o.write=()=>{};o.remove=()=>{};
-	for(const field of s.children) if(field.option.startsWith('local_') || field.option==='_upstream_original') {
-		for(const dep of field.deps || [])if(dep.node_mode==='manual')dep._dial_advanced='1';
+
+	o = s.option(form.Flag, '_dial_advanced', _('Advanced connection settings'));
+	o.default = '0';
+	o.depends({ type: /^(?!selector$|urltest$|tailscale$|wireguard$).+/ });
+	o.cfgvalue = sid => ['node_detour', 'node_bind_interface', 'node_domain_resolver', 'node_domain_strategy'].some(k => uci.get(data[0], sid, k)) ? '1' : '0';
+	o.write = () => {};
+	o.remove = () => {};
+
+	o = s.option(hp.CBILazyListValue, 'node_detour', _('Upstream outbound'),
+		_('Connect to this proxy through the selected outbound.'));
+	o.value('', _('Connect directly'));
+	o.load = function(sid) {
+		this.keylist = []; this.vallist = []; this.lazyChoices = {};
+		this.value('', _('Connect directly'));
+		uci.sections(data[0], 'node', n => {
+			if (n['.name'] !== sid) {
+				const label = nodeName(n['.name']);
+				this.value(n['.name'], label);
+				this.lazyChoices[n['.name']] = label;
+			}
+		});
+		return this.super('load', sid);
+	};
+	o.depends({ type: /^(?!selector$|urltest$|tailscale$|wireguard$).+/, _dial_advanced: '1' });
+	o.validate = nodeValidation;
+	o.retain = true;
+
+	o = s.option(widgets.DeviceSelect, 'node_bind_interface', _('Bind interface'),
+		_('Used for a direct connection to the proxy server. Dial fields such as interface binding are ignored when an upstream is set.'));
+	o.multiple = false;
+	o.noaliases = true;
+	o.retain = true;
+	o.depends({ type: /^(?!selector$|urltest$|tailscale$|wireguard$).+/, _dial_advanced: '1' });
+
+	o = s.option(form.ListValue, 'node_domain_resolver', _('Server address resolver'),
+		_('Custom DNS servers are available only in custom routing mode. An unavailable resolver prevents applying the configuration.'));
+	o.value('', _('Use routing default'));
+	o.value('default-dns', _('Default DNS (issued by WAN)'));
+	o.value('system-dns', _('System DNS'));
+	if (routing_mode === 'custom')
+		uci.sections(data[0], 'dns_server', n => { if (n.enabled === '1') o.value(n['.name'], n.label || n['.name']); });
+	o.retain = true;
+	o.depends({ type: /^(?!selector$|urltest$|tailscale$|wireguard$).+/, _dial_advanced: '1' });
+
+	o = s.option(form.ListValue, 'node_domain_strategy', _('Server address strategy'));
+	o.value('', _('Use routing default'));
+	for (const key in hp.dns_strategy)
+		if (key) o.value(key, hp.dns_strategy[key]);
+	o.retain = true;
+	o.depends({ type: /^(?!selector$|urltest$|tailscale$|wireguard$).+/, _dial_advanced: '1' });
+
+	for (const field of s.children) {
+		if (!['type', '_apply'].includes(field.option))
+			field.modalonly = true;
 	}
-	const first=['_apply','label','node_mode','type','node_base','_base_info'];
-	const last=['_dial_advanced','local_detour','_upstream_original','local_bind_interface','local_domain_resolver','local_domain_strategy'];
-	const byName=new Map(s.children.map(field=>[field.option,field]));
-	s.children=[...first.map(k=>byName.get(k)).filter(Boolean),...s.children.filter(field=>!first.includes(field.option) && !last.includes(field.option)),...last.map(k=>byName.get(k)).filter(Boolean)];
-	// References expose only inheritance and override controls, not duplicate credentials.
-	for(const field of s.children){
-		if(!['type','_apply'].includes(field.option))field.modalonly=true;
-		if(!['label','node_mode','node_base','_base_info','_upstream_original','_apply','_dial_advanced'].includes(field.option) && !field.option.startsWith('local_')){
-			if(field.deps?.length)for(const dep of field.deps)dep.node_mode='manual';else field.depends('node_mode','manual');
-			field.retain=true;
-			if(['tcp_fast_open','tcp_multi_path','udp_fragment'].includes(field.option))for(const dep of field.deps)dep.type=/^(?!selector$|urltest$).+/;
+	const groupMembers = s.children.find(o => o.option === 'group_nodes');
+	groupMembers.validate = nodeValidation;
+	o = s.option(form.DummyValue, '_node_summary', _('Node / group details'));
+	o.modalonly = false;
+	o.cfgvalue = function(sid) {
+		const n = uci.get(data[0], sid) || {};
+		const via = n.node_detour ? ' · ' + _('Via %s').format(nodeName(n.node_detour)) : '';
+		if (['selector', 'urltest'].includes(n.type)) {
+			const members = n.group_nodes || [];
+			const selected = n.type === 'selector' ? _('Default: %s').format(groupLabel(n.group_default || members[0])) : _('Automatic latency selection');
+			return _('%s members').format(members.length) + ' · ' + selected + ' — ' + members.map(id => uci.get(data[0], id, 'label') || id).join(', ');
 		}
-	}
-	const groupMembers=s.children.find(o=>o.option==='group_nodes');groupMembers.validate=nodeValidation;
-	o=s.option(form.DummyValue,'_node_summary',_('Node / group details'));
-	o.modalonly=false;
-	o.cfgvalue=function(sid){
-		const n=uci.get(data[0],sid) || {};
-		if(n.node_mode==='reference')return _('Reference: %s').format(nodeName(n.node_base))+(n.local_detour && n.local_detour!=='_direct'?' · '+_('Via %s').format(nodeName(n.local_detour)):'');
-		if(['selector','urltest'].includes(n.type)){
-			const members=n.group_nodes || [];
-			const selected=n.type==='selector'?_('Default: %s').format(groupLabel(n.group_default || members[0])):_('Automatic latency selection');
-			return _('%s members').format(members.length)+' · '+selected+' — '+members.map(id=>uci.get(data[0],id,'label') || id).join(', ');
-		}
-		if(n.type==='tailscale')return n.tailscale_exit_node?_('Exit node: %s').format(n.tailscale_exit_node):_('Tailnet access');
-		if(n.type==='direct')return _('Direct connection');
-		return (n.address || '—')+(n.port?':'+n.port:'')+(n.tls==='1'?' · TLS':'')+(n.transport?' · '+n.transport:'');
+		if (n.type === 'tailscale') return (n.tailscale_exit_node ? _('Exit node: %s').format(n.tailscale_exit_node) : _('Tailnet access')) + via;
+		if (n.type === 'direct') return _('Direct connection') + via;
+		if (n.type === 'block') return _('Block');
+		return (n.address || '—') + (n.port ? ':' + n.port : '') + (n.tls === '1' ? ' · TLS' : '') + (n.transport ? ' · ' + n.transport : '') + via;
 	};
 	return s;
 }
@@ -1274,10 +1109,6 @@ return view.extend({
 
 		m = new form.Map('homeproxy', _('Edit nodes'));
 		indexMapFieldsDuringDependencyCheck(m);
-		const mapSave = m.save;
-		m.save = function(cb, silent) {
-			return saveNodeMap(this, mapSave, data[0], cb, silent, hp.calcStringMD5.bind(hp));
-		};
 
 		s = m.section(form.NamedSection, 'subscription', 'homeproxy');
 
@@ -1381,7 +1212,7 @@ return view.extend({
 
 		/* Subscription nodes start */
 		for (const info of subinfo) {
-			const tab = info.id ? 'sub_id_' + info.id : 'sub_hash_' + info.hash;
+			const tab = 'sub_hash_' + info.hash;
 			s.tab(tab, (info.configured ? _('Sub (%s)') : _('Removed sub (%s)')).format(info.title));
 			if (info.configured) {
 				o = s.taboption(tab, form.Button, '_update_' + info.hash, _('Update nodes from subscriptions'));
@@ -1392,7 +1223,7 @@ return view.extend({
 				};
 				o.onclick = function() {
 					if (this.map.readonly) return;
-					return runSubscriptionUpdate(info.id || 'src_' + info.hash).then(() => location.reload()).catch(err => {
+					return runSubscriptionUpdate(info.hash).then(() => location.reload()).catch(err => {
 						ui.addNotification(null, E('p', _('An error occurred during updating subscriptions: %s').format(err)));
 					});
 				};
@@ -1428,7 +1259,6 @@ return view.extend({
 
 		o = s.taboption('subscription', form.DynamicList, 'subscription_url', _('Subscription URL-s'),
 			_('Supports sing-box JSON nodes and groups, SIP008, and proxy share-link subscriptions. DNS and routing rules are not imported.'));
-		configureSubscriptionURLWrites(o);
 
 		o.validate = function(section_id, value) {
 			if (!section_id || !value)
@@ -1524,7 +1354,6 @@ return view.extend({
 			}
 			return this.map.save(() => {
 				for (const id of subnodes) uci.remove(data[0], id);
-				this.map.subscriptionWritePending = true;
 			});
 		}
 		/* Subscriptions settings end */

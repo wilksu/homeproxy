@@ -8,9 +8,10 @@
 'use strict';
 
 import { cursor } from 'uci';
+import { md5 } from 'digest';
 import { isEmpty, parseURL, validation } from 'homeproxy';
 
-const uci = cursor();
+const uci = cursor(getenv('HP_UCI_CONF_DIR'), getenv('HP_UCI_SAVE_DIR'));
 
 const uciconfig = 'homeproxy';
 uci.load(uciconfig);
@@ -208,8 +209,89 @@ uci.foreach(uciconfig, ucidnsrule, (cfg) => {
 	}
 });
 
-/* nodes options */
+/* Materialize old references under their original section IDs. Resolve all
+ * references against the original records before removing any overrides. */
+const oldNodes = {}, sourceHashes = {}, materialized = {};
+const resolved = {}, visiting = {}, path = [];
+const dialKeys = ['detour', 'bind_interface', 'domain_resolver', 'domain_strategy'];
+uci.foreach(uciconfig, ucinode, cfg => { oldNodes[cfg['.name']] = cfg; });
+uci.foreach(uciconfig, 'subscription_source', cfg => {
+	if (cfg.url) sourceHashes[cfg['.name']] = md5(replace(cfg.url, /#.*$/, ''));
+});
+
+function materialize(id) {
+	if (resolved[id]) return { ...resolved[id] };
+	const cfg = oldNodes[id];
+	if (!cfg || visiting[id])
+		die('Cannot migrate node reference: ' + join(' -> ', [...path, id]));
+	let node = { ...cfg };
+	if (cfg.node_mode === 'reference') {
+		visiting[id] = true;
+		push(path, id);
+		node = materialize(cfg.node_base);
+		pop(path);
+		delete visiting[id];
+		if (node.type in ['selector', 'urltest', 'tailscale', 'wireguard'])
+			die('Cannot migrate invalid base node for ' + id);
+		for (let key in ['grouphash', 'source_id', 'source_tag', 'source_dial_options', 'node_id'])
+			delete node[key];
+		node.label = cfg.label || id;
+	}
+	for (let key in dialKeys) {
+		const val = cfg['local_' + key];
+		if (val === '_direct' || val === '_default')
+			delete node['node_' + key];
+		else if (!isEmpty(val))
+			node['node_' + key] = val;
+	}
+	for (let key in keys(node))
+		if (substr(key, 0, 1) === '.' || match(key, /^local_/) ||
+		    key in ['node_mode', 'node_base', 'source_id', 'tls_ech_tls_disable_drs', 'tls_ech_enable_pqss', 'wireguard_gso'])
+			delete node[key];
+	resolved[id] = node;
+	return { ...node };
+}
+
+for (let id in keys(oldNodes))
+	if (oldNodes[id].node_mode === 'reference')
+		materialized[id] = materialize(id);
+
+/* Convert legacy routing outbounds into library nodes, keeping rule targets. */
+uci.foreach(uciconfig, uciroutingnode, cfg => {
+	if (cfg.enabled !== '1') return;
+	const id = cfg['.name'];
+	let node;
+	if (cfg.node === 'urltest') {
+		node = { type: 'urltest', group_nodes: cfg.urltest_nodes };
+		for (let key in ['url', 'interval', 'tolerance', 'idle_timeout', 'interrupt_exist_connections'])
+			if (!isEmpty(cfg['urltest_' + key])) node['group_' + key] = cfg['urltest_' + key];
+	} else {
+		node = materialize(cfg.node);
+		for (let key in ['grouphash', 'source_tag', 'source_dial_options', 'node_id'])
+			delete node[key];
+		if (cfg.outbound === 'direct-out') delete node.node_detour;
+		else if (cfg.outbound) node.node_detour = cfg.outbound;
+		for (let key in ['bind_interface', 'domain_resolver', 'domain_strategy'])
+			if (!isEmpty(cfg[key])) node['node_' + key] = cfg[key];
+	}
+	node.label = cfg.label || id;
+	for (let key in keys(cfg))
+		if (substr(key, 0, 1) !== '.') uci.delete(uciconfig, id, key);
+	uci.set(uciconfig, id, ucinode);
+	for (let key in keys(node))
+		uci.set(uciconfig, id, key, node[key]);
+});
+
 uci.foreach(uciconfig, ucinode, (cfg) => {
+	const id = cfg['.name'];
+	const node = materialized[id];
+	if (node) {
+		for (let key in keys(cfg))
+			if (substr(key, 0, 1) !== '.' && !(key in node)) uci.delete(uciconfig, id, key);
+		for (let key in keys(node))
+			uci.set(uciconfig, id, key, node[key]);
+		return;
+	}
 	/* tls_ech_tls_disable_drs is useless and deprecated in sb 1.12 */
 	if (!isEmpty(cfg.tls_ech_tls_disable_drs))
 		uci.delete(uciconfig, cfg['.name'], 'tls_ech_tls_disable_drs');
@@ -221,6 +303,33 @@ uci.foreach(uciconfig, ucinode, (cfg) => {
 	/* wireguard_gso was deprecated in sb 1.11 */
 	if (!isEmpty(cfg.wireguard_gso))
 		uci.delete(uciconfig, cfg['.name'], 'wireguard_gso');
+
+	/* Unify local_* dial overrides into node_* and remove obsolete fields */
+	const defaults = {};
+	for (let key in dialKeys) {
+		const field = 'node_' + key;
+		if (field in cfg) defaults[field] = cfg[field];
+		const localKey = 'local_' + key;
+		if (localKey in cfg) {
+			const val = cfg[localKey];
+			if (val === '_direct' || val === '_default')
+				uci.delete(uciconfig, cfg['.name'], 'node_' + key);
+			else if (!isEmpty(val))
+				uci.set(uciconfig, cfg['.name'], 'node_' + key, val);
+			uci.delete(uciconfig, cfg['.name'], localKey);
+		}
+	}
+	if (cfg.source_id && !cfg.source_dial_options)
+		uci.set(uciconfig, id, 'source_dial_options', sprintf('%J', defaults));
+	if (sourceHashes[cfg.source_id] && cfg.grouphash !== sourceHashes[cfg.source_id])
+		uci.set(uciconfig, id, 'grouphash', sourceHashes[cfg.source_id]);
+	for (let obsolete in ['node_mode', 'node_base', 'source_id'])
+		if (obsolete in cfg)
+			uci.delete(uciconfig, cfg['.name'], obsolete);
+});
+
+uci.foreach(uciconfig, 'subscription_source', (cfg) => {
+	uci.delete(uciconfig, cfg['.name']);
 });
 
 /* routing rules options */
@@ -259,5 +368,5 @@ uci.foreach(uciconfig, uciserver, (cfg) => {
 		uci.delete(uciconfig, cfg['.name'], 'domain_strategy');
 });
 
-if (!isEmpty(uci.changes(uciconfig)))
-	uci.commit(uciconfig);
+if (!isEmpty(uci.changes(uciconfig)) && !uci.commit(uciconfig))
+	die('Unable to commit HomeProxy configuration migration');

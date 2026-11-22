@@ -1,23 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 
 import { loadHomeproxy, createDocument, parseValue } from './support/luci-form.mjs';
 import { loadClientView, renderClientForm, uciFixture } from './support/client-view.mjs';
 
 const document = createDocument();
 const FEATURES = { version: '1.14.0', with_quic: true, with_tls: true, with_grpc: true, with_ech: true, with_vifas: true, hp_has_tproxy: true, hp_has_ip_full: true, hp_has_tun: true };
+const FEED_HASH = crypto.createHash('md5').update('https://same.test/feed').digest('hex');
 
 function configSections(routing_mode, node_count) {
 	const sections = [
 		{ '.name': 'config', '.type': 'homeproxy', routing_mode },
-		{ '.name': 'subscription', '.type': 'subscription', subscription_url: ['https://same.test/feed#Alpha'] },
-		{ '.name': 'src_a', '.type': 'subscription_source', url: 'https://same.test/feed' }
+		{ '.name': 'subscription', '.type': 'subscription', subscription_url: ['https://same.test/feed#Alpha'] }
 	];
 
 	for (let i = 0; i < node_count; i++) {
 		sections.push({
 			'.name': `node${i}`, '.type': 'node', label: `Node ${i}`,
-			address: '1.2.3.4', port: '443', type: 'vmess', source_id: 'src_a'
+			address: '1.2.3.4', port: '443', type: 'vmess', grouphash: FEED_HASH
 		});
 	}
 

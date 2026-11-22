@@ -2,12 +2,16 @@
 name: homeproxy-baseline
 services:
   openwrt:
-    image: homeproxy-baseline:25.12.0-sb1.14.0-20260909
+    image: ${HP_DEV_IMAGE:-homeproxy-baseline:25.12.0-sb1.14.0-20260909}
     pull_policy: never
     platform: linux/amd64
     hostname: homeproxy-baseline
     restart: unless-stopped
     entrypoint: ["/bin/sh", "/opt/homeproxy-dev/container-entrypoint.sh"]
+    environment:
+      HP_DEV_SUBNET: ${HP_DEV_SUBNET:-10.253.247.0/24}
+      HP_DEV_GATEWAY: ${HP_DEV_GATEWAY:-10.253.247.1}
+      HP_DEV_IPV4_ADDRESS: ${HP_DEV_IPV4_ADDRESS:-10.253.247.2}
     cap_add:
       - NET_ADMIN
     networks:
@@ -15,23 +19,26 @@ services:
         ipv4_address: ${HP_DEV_IPV4_ADDRESS:-10.253.247.2}
     ports:
       - "127.0.0.1:${HP_DEV_HTTP_PORT:-8080}:80"
+      - "127.0.0.1:5336:5336"
+      - "127.0.0.1:5337:5337"
     volumes:
       - config:/etc/config
       - data:/etc/homeproxy
       - ./htdocs/luci-static/resources/view/homeproxy:/www/luci-static/resources/view/homeproxy:ro
       - ./htdocs/luci-static/resources/homeproxy.js:/www/luci-static/resources/homeproxy.js:ro
-      - ./htdocs/luci-static/resources/homeproxy-api.js:/www/luci-static/resources/homeproxy-api.js:ro
       - ./root/etc/homeproxy/scripts:/etc/homeproxy/scripts:ro
       - ./root/etc/init.d/homeproxy:/etc/init.d/homeproxy:ro
       - ./root/etc/capabilities/homeproxy.json:/etc/capabilities/homeproxy.json:ro
       - ./root/usr/share/rpcd/ucode/luci.homeproxy:/usr/share/rpcd/ucode/luci.homeproxy:ro
       - ./root/usr/share/ucode/homeproxy_runtime.uc:/usr/share/ucode/homeproxy_runtime.uc:ro
+      - ./root/usr/share/ucode/homeproxy_certificates.uc:/usr/share/ucode/homeproxy_certificates.uc:ro
       - ./root/usr/share/rpcd/acl.d/luci-app-homeproxy.json:/usr/share/rpcd/acl.d/luci-app-homeproxy.json:ro
       - ./root/usr/share/luci/menu.d/luci-app-homeproxy.json:/usr/share/luci/menu.d/luci-app-homeproxy.json:ro
       - ./root/usr/share/homeproxy/compat.json:/usr/share/homeproxy/compat.json:ro
-      - ./root/www/cgi-bin/homeproxy-api:/www/cgi-bin/homeproxy-api:ro
+      - ./root/usr/share/homeproxy/dashboard-connect.html:/usr/share/homeproxy/dashboard-connect.html:ro
       - ./dev/setup-mounted.sh:/opt/homeproxy-dev/setup-mounted.sh:ro
       - ./dev/container-entrypoint.sh:/opt/homeproxy-dev/container-entrypoint.sh:ro
+      - ./dev/smoke-core.sh:/opt/homeproxy-dev/smoke-core.sh:ro
     post_start:
       - command: /bin/sh /opt/homeproxy-dev/setup-mounted.sh
     mem_limit: 512m
@@ -42,7 +49,7 @@ services:
         max-size: "5m"
         max-file: "2"
     healthcheck:
-      test: ["CMD-SHELL", "ubus list luci.homeproxy | grep -qx luci.homeproxy && uclient-fetch -q -O /dev/null http://127.0.0.1/"]
+      test: ["CMD-SHELL", "test -s /etc/homeproxy/api.secret && command -v curl && command -v dig && command -v openssl && ubus list luci.homeproxy | grep -qx luci.homeproxy && uclient-fetch -q -O /dev/null http://127.0.0.1/"]
       interval: 10s
       timeout: 5s
       start_period: 30s

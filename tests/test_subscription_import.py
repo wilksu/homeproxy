@@ -19,7 +19,7 @@ class SubscriptionImportTests(unittest.TestCase):
   result = self.invoke(document)
   self.assertNotIn('error', result)
   nodes = result['result']
-  config = copy.deepcopy(BASE); config.pop('node1'); config.pop('route1')
+  config = copy.deepcopy(BASE); config.pop('node1')
   for node in nodes:
    config[node['node_id']] = {**node, '.type':'node', '.name':node['node_id']}
   config['config']['main_node'] = nodes[0]['node_id']
@@ -74,6 +74,21 @@ class SubscriptionImportTests(unittest.TestCase):
    with self.subTest(network=network):
     result = self.invoke({'outbounds':[self.proxy(network=network)]})
     self.assertIn('error', result)
+
+ def test_group_block_member_and_provider_dns_use_local_configuration(self):
+  proxy = self.proxy(domain_resolver={'server':'provider-dns', 'strategy':'ipv4_only'})
+  document = {'outbounds':[
+   {'type':'selector', 'tag':'choose', 'outbounds':['proxy','REJECT']},
+   proxy, {'type':'block', 'tag':'REJECT'}],
+   'dns':{'servers':[{'type':'udp', 'tag':'provider-dns', 'server':'192.0.2.2'}]}}
+  nodes, outbounds = self.roundtrip(document)
+  block = next(n for n in nodes if n['type']=='block')
+  selector = next(n for n in outbounds if n['type']=='selector')
+  self.assertIn('cfg-'+block['node_id']+'-out', selector['outbounds'])
+  dial = next(n for n in outbounds if n['type']=='shadowsocks')
+  self.assertEqual(dial['domain_resolver'], {'server':'default-dns','strategy':'ipv4_only'})
+  del document['dns']
+  self.assertIn('undeclared DNS resolver', self.invoke(document)['error'])
 
  def test_optional_nulls_do_not_become_strings(self):
   node = self.proxy('vless', detour=None, bind_interface=None, transport=None,

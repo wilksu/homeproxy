@@ -53,40 +53,40 @@ function validECH(content) {
 
 // Options are for isolated tests; the RPC only passes the whitelisted name.
 export function installCertificate(name, options) {
- const kinds = { client_ca: 'certificate', server_publickey: 'certificate', server_privatekey: 'key', client_ech_conf: 'ech' };
- const kind = kinds[name];
- if (!kind) return { result: false, error: 'Illegal certificate filename' };
- const upload = options?.upload || '/tmp/homeproxy_certificate.tmp';
- const directory = options?.directory || '/etc/homeproxy/certs';
- let work, candidate, result;
- try {
-  const stat = lstat(upload);
-  if (stat?.type !== 'file' || stat.size <= 0 || stat.size > 1048576) die('Upload must be a non-empty PEM file smaller than 1 MiB');
-  const raw = readfile(upload); unlink(upload);
-  if (raw === null) die('Unable to read uploaded file');
-  const content = trim(replace(raw, /\r\n?/g, '\n')) + '\n';
-  if (!lstat(directory) && !mkdir(directory)) die('Unable to create certificate directory');
-  work = mkdtemp(directory + '/.upload.XXXXXX');
-  if (!work) die('Unable to stage uploaded file');
-  candidate = work + '/certificate.pem';
-  if (writefile(candidate, content) !== length(content) || !chmod(candidate, 0600)) die('Unable to stage uploaded file');
-  if (kind === 'ech') {
-   if (!validECH(content)) die('Invalid or unsupported ECH config');
-  } else {
-   if (!access('/usr/bin/openssl')) die('OpenSSL is unavailable; install openssl-util');
-   const args = kind === 'key' ? ['pkey', '-inform', 'PEM', '-in', candidate, '-passin', 'pass:', '-check', '-noout'] :
-    ['crl2pkcs7', '-nocrl', '-certfile', candidate, '-out', '/dev/null'];
-   // crl2pkcs7 checks every certificate, but also accepts an empty collection.
-   // x509 additionally requires at least one real certificate.
-   if (execute(['/usr/bin/openssl', ...args], 5000).code !== 0 ||
-       (kind === 'certificate' && execute(['/usr/bin/openssl', 'x509', '-inform', 'PEM', '-in', candidate, '-noout'], 5000).code !== 0))
-    die('Invalid ' + kind + ' PEM file');
-  }
-  if (!chown(candidate, options?.owner ?? 'sing-box', options?.group ?? 'sing-box') ||
-      !rename(candidate, directory + '/' + name + '.pem')) die('Unable to install uploaded file');
-  result = { result: true };
- } catch (e) { result = { result: false, error: '' + e }; }
- if (candidate) unlink(candidate);
- if (work) rmdir(work);
- return result;
+	const kinds = { client_ca: 'certificate', server_publickey: 'certificate', server_privatekey: 'key', client_ech_conf: 'ech' };
+	const kind = kinds[name];
+	if (!kind) return { result: false, error: 'Illegal certificate filename' };
+	const upload = options?.upload || '/tmp/homeproxy_certificate.tmp';
+	const directory = options?.directory || '/etc/homeproxy/certs';
+	let work, candidate, result;
+	try {
+		const stat = lstat(upload);
+		if (stat?.type !== 'file' || stat.size <= 0 || stat.size > 1048576) die('Upload must be a non-empty PEM file smaller than 1 MiB');
+		const raw = readfile(upload); unlink(upload);
+		if (raw === null) die('Unable to read uploaded file');
+		const content = trim(replace(raw, /\r\n?/g, '\n')) + '\n';
+		if (!lstat(directory) && !mkdir(directory)) die('Unable to create certificate directory');
+		work = mkdtemp(directory + '/.upload.XXXXXX');
+		if (!work) die('Unable to stage uploaded file');
+		candidate = work + '/certificate.pem';
+		if (writefile(candidate, content) !== length(content) || !chmod(candidate, 0600)) die('Unable to stage uploaded file');
+		if (kind === 'ech') {
+			if (!validECH(content)) die('Invalid or unsupported ECH config');
+		} else {
+			if (!access('/usr/bin/openssl')) die('OpenSSL is unavailable; install openssl-util');
+			const args = kind === 'key' ? ['pkey', '-inform', 'PEM', '-in', candidate, '-passin', 'pass:', '-check', '-noout'] :
+				['crl2pkcs7', '-nocrl', '-certfile', candidate, '-out', '/dev/null'];
+			// crl2pkcs7 checks every certificate, but also accepts an empty collection.
+			// x509 additionally requires at least one real certificate.
+			if (execute(['/usr/bin/openssl', ...args], 5000).code !== 0 ||
+			    (kind === 'certificate' && execute(['/usr/bin/openssl', 'x509', '-inform', 'PEM', '-in', candidate, '-noout'], 5000).code !== 0))
+				die('Invalid ' + kind + ' PEM file');
+		}
+		if (!chown(candidate, options?.owner ?? 'sing-box', options?.group ?? 'sing-box') ||
+		    !rename(candidate, directory + '/' + name + '.pem')) die('Unable to install uploaded file');
+		result = { result: true };
+	} catch (e) { result = { result: false, error: '' + e }; }
+	if (candidate) unlink(candidate);
+	if (work) rmdir(work);
+	return result;
 };

@@ -7,13 +7,16 @@ UCODE=os.environ.get('UCODE','')
 class SubscriptionCleanupTests(unittest.TestCase):
  def reconcile(self, main, udp, members, first='live'):
   source=(ROOT/'root/etc/homeproxy/scripts/update_subscriptions.uc').read_text()
-  body=source[source.index('\tif (!isEmpty(main_node)'):source.index('\n}\n\nif (!isEmpty(subscription_urls))')]
+  body=source[source.index('\tif (!isEmpty(main_node)'):source.index('\n}\n\ntry {')]
   harness='''let state={main_urltest_nodes:MEMBERS,main_udp_urltest_nodes:MEMBERS};
-let commits=0;const uciconfig='homeproxy',ucimain='config',ucinode='node';
+let commits=0,changed=false;const uciconfig='homeproxy',ucimain='config',ucinode='node';
 const main_node=MAIN,main_udp_node=UDP,added=1,removed=1;
-const uci={get_first:()=>FIRST,get:(c,n,k)=>k?state[k]:(n==='live'?'node':null),set:(c,n,k,v)=>{state[k]=v;},commit:()=>{commits++;}};
+const uci={get_first:()=>FIRST,get:(c,n,k)=>k?state[k]:(n==='live'?'node':null),set:(c,n,k,v)=>{state[k]=v;},commit:()=>{commits++;return true;}};
 const isEmpty=v=>!v;const log=()=>{};
+const nodeModel=()=>({validate:()=>{}}),node_result=[];
+(() => {
 BODY
+})();
 printf('%J',{state,commits});'''
   for key,value in [('MEMBERS',members),('MAIN',main),('UDP',udp),('FIRST',first)]:
    harness=harness.replace(key,json.dumps(value))

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<title>HomeProxy · sing-box Dashboard</title>
+<p>Opening sing-box Dashboard…</p>
+<script>
+'use strict';
+const secret = new URLSearchParams(location.hash.slice(1)).get('secret');
+history.replaceState(null, '', location.pathname);
+if (secret && /^[a-f0-9]{64}$/.test(secret)) {
+	const key = 'sing-box-dashboard.servers';
+	let saved;
+	try { saved = JSON.parse(localStorage.getItem(key)); } catch {}
+	const servers = Array.isArray(saved?.servers) ? saved.servers : [];
+	const server = { id: 'homeproxy-local', name: 'HomeProxy', url: location.origin, secret };
+	try {
+		localStorage.setItem(key, JSON.stringify({
+			servers: [...servers.filter(entry => entry?.id !== server.id), server],
+			activeId: server.id
+		}));
+	} catch {}
+}
+location.replace('./');
+</script>
+</html>

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Typed import into the existing node model. Unknown fields are reported, never dropped. */
+/* Typed import into the existing node model. Unsupported secondary fields are skipped. */
 import { md5 } from 'digest';
-import { mkdir,writefile,chmod,unlink } from 'fs';
+import { mkdir, writefile, chmod, unlink } from 'fs';
 const scalar={server:'address',server_port:'port',username:'username',password:'password',uuid:'uuid',method:'shadowsocks_encrypt_method',plugin:'shadowsocks_plugin',plugin_opts:'shadowsocks_plugin_opts',server_ports:'hysteria_hopping_port',up_mbps:'hysteria_up_mbps',down_mbps:'hysteria_down_mbps',bbr_profile:'hysteria_bbr_profile',disable_chrome_parrot:'hysteria_disable_chrome_parrot',recv_window_conn:'hysteria_recv_window_conn',recv_window:'hysteria_revc_window',disable_mtu_discovery:'hysteria_disable_mtu_discovery',client_version:'ssh_client_version',host_key:'ssh_host_key',host_key_algorithms:'ssh_host_key_algo',private_key:'ssh_priv_key',private_key_passphrase:'ssh_priv_key_pp',user:'username',congestion_control:'tuic_congestion_control',udp_relay_mode:'tuic_udp_relay_mode',udp_over_stream:'tuic_udp_over_stream',zero_rtt_handshake:'tuic_enable_zero_rtt',flow:'vless_flow',alter_id:'vmess_alterid',security:'vmess_encrypt',global_padding:'vmess_global_padding',authenticated_length:'vmess_authenticated_length',packet_encoding:'packet_encoding',tcp_fast_open:'tcp_fast_open',tcp_multi_path:'tcp_multi_path',udp_fragment:'udp_fragment',proxy_protocol:'proxy_protocol'};
 const times={idle_session_check_interval:'anytls_idle_session_check_interval',idle_session_timeout:'anytls_idle_session_timeout',hop_interval:'hysteria_hop_interval',hop_interval_max:'hysteria_hop_interval_max',heartbeat:'tuic_heartbeat'};
 const tls={enabled:'tls',server_name:'tls_sni',insecure:'tls_insecure',alpn:'tls_alpn',min_version:'tls_min_version',max_version:'tls_max_version',cipher_suites:'tls_cipher_suites',certificate_path:'tls_cert_path',certificate_public_key_sha256:'tls_certificate_public_key_sha256'};
@@ -30,8 +30,8 @@ function seconds(v) {
  const m=match(v || '',/^([0-9]+)(ms|s|m|h)$/);if(!m)die('Unsupported duration; use an integral duration in seconds, minutes or hours');
  const n=int(m[1])*(m[2]==='h'?3600:m[2]==='m'?60:1);if(m[2]==='ms'){if(n%1000)die('Subsecond duration is not supported by this node field');return ''+(n/1000);}return ''+n;
 }
-function fields(target, source, mapping, label) {
- for(let key in fieldKeys(source)){if(!mapping[key])die(label+'.'+key+': field is not supported by the node form yet');target[mapping[key]]=value(source[key]);}
+function fields(target, source, mapping) {
+ for(let key in fieldKeys(source)){if(!mapping[key])continue;target[mapping[key]]=value(source[key]);}
 }
 export function nodeID(source, key) { return 'n'+md5(source+'\n'+key); };
 export function subscriptionDocument(content) {
@@ -40,10 +40,10 @@ export function subscriptionDocument(content) {
   die('Clash/Mihomo YAML subscriptions are not supported; use sing-box JSON, SIP008, or share links');
  return null;
 };
-export function importNode(input, resolve) {
+export function importNode(input, resolve, warn) {
  if (input.type === 'tailscale') die('Tailscale endpoints must be configured locally; subscriptions cannot manage router services');
  const n={type:input.type,label:input.tag,source_tag:input.tag};
- if(!(input.type in supported))die('Unsupported node type: '+input.type);
+ if(!(input.type in supported) && input.type!=='block')die('Unsupported node type: '+input.type);
  for(let key in fieldKeys(input)) {
   const v=input[key];if(key in ['type','tag'])continue;
   if(key==='outbounds'){n.group_nodes=map(v,t=>resolve(t));continue;}
@@ -60,10 +60,10 @@ export function importNode(input, resolve) {
   if(key==='auth' || key==='auth_str')continue;
   if(key==='obfs'){
    if(type(v)==='string')n.hysteria_obfs_password=v;
-   else fields(n,v,{type:'hysteria_obfs_type',password:'hysteria_obfs_password',min_packet_size:'hysteria_obfs_min_packet_size',max_packet_size:'hysteria_obfs_max_packet_size'},'obfs');continue;
+   else fields(n,v,{type:'hysteria_obfs_type',password:'hysteria_obfs_password',min_packet_size:'hysteria_obfs_min_packet_size',max_packet_size:'hysteria_obfs_max_packet_size'});continue;
   }
   if(key==='udp_over_tcp'){
-   if(type(v)==='bool')n.udp_over_tcp=value(v);else fields(n,v,{enabled:'udp_over_tcp',version:'udp_over_tcp_version'},'udp_over_tcp');continue;
+   if(type(v)==='bool')n.udp_over_tcp=value(v);else fields(n,v,{enabled:'udp_over_tcp',version:'udp_over_tcp_version'});continue;
   }
   if(key==='tls'){
    for(let t in fieldKeys(v)){
@@ -75,17 +75,18 @@ export function importNode(input, resolve) {
       // The paired 1.14 core resolves these compatibility names to Chrome.
       n.tls_utls=fingerprint in ['chrome_psk','chrome_psk_shuffle','chrome_padding_psk_shuffle','chrome_pq','chrome_pq_psk'] ? 'chrome' : fingerprint;
      }
-     for(let k in fieldKeys(v[t]))if(!(k in ['enabled','fingerprint']))die('Unsupported TLS uTLS field: '+k);
     }
-    else if(t==='reality')fields(n,v[t],{enabled:'tls_reality',public_key:'tls_reality_public_key',short_id:'tls_reality_short_id'},'tls.reality');
-    else if(t==='ech')fields(n,v[t],{enabled:'tls_ech',config:'tls_ech_config',config_path:'tls_ech_config_path'},'tls.ech');
-    else die('Unsupported TLS field: '+t);
+    else if(t==='reality')fields(n,v[t],{enabled:'tls_reality',public_key:'tls_reality_public_key',short_id:'tls_reality_short_id'});
+    else if(t==='ech')fields(n,v[t],{enabled:'tls_ech',config:'tls_ech_config',config_path:'tls_ech_config_path'});
+    else warn?.('tls.'+t);
    }continue;
   }
   if(key==='multiplex'){
    for(let k in fieldKeys(v)) {
-    if(k==='brutal')fields(n,v[k],{enabled:'multiplex_brutal',up_mbps:'multiplex_brutal_up',down_mbps:'multiplex_brutal_down'},'multiplex.brutal');
-    else fields(n,{[k]:v[k]},{enabled:'multiplex',protocol:'multiplex_protocol',max_connections:'multiplex_max_connections',min_streams:'multiplex_min_streams',max_streams:'multiplex_max_streams',padding:'multiplex_padding'},'multiplex');
+    if(k==='brutal')fields(n,v[k],{enabled:'multiplex_brutal',up_mbps:'multiplex_brutal_up',down_mbps:'multiplex_brutal_down'});
+    else if(k in ['enabled','protocol','max_connections','min_streams','max_streams','padding'])
+     fields(n,{[k]:v[k]},{enabled:'multiplex',protocol:'multiplex_protocol',max_connections:'multiplex_max_connections',min_streams:'multiplex_min_streams',max_streams:'multiplex_max_streams',padding:'multiplex_padding'});
+    else warn?.('multiplex.'+k);
    }continue;
   }
   if(key==='transport'){
@@ -93,15 +94,17 @@ export function importNode(input, resolve) {
    for(let k in fieldKeys(v)){
     if(k==='type')continue;
     if(k==='headers'){
-     const names=fieldKeys(v[k]);if(!length(names))continue;
-     if(length(names)!==1 || lc(names[0])!=='host')die('Transport headers other than Host need a supported form field');
-     n.ws_host=value(v[k][names[0]]);continue;
+     for(let name in fieldKeys(v[k]))
+      if(lc(name)==='host')n.ws_host=value(v[k][name]);else warn?.('transport.headers.'+name);
+     continue;
     }
     const mapping={host:v.type==='httpupgrade'?'httpupgrade_host':'http_host',path:v.type==='ws'?'ws_path':'http_path',method:'http_method',max_early_data:'websocket_early_data',early_data_header_name:'websocket_early_data_header',service_name:'grpc_servicename',permit_without_stream:'grpc_permit_without_stream'};
-    if(k in ['idle_timeout','ping_timeout'])n['http_'+k]=seconds(v[k]);else fields(n,{[k]:v[k]},mapping,'transport');
+    if(k in ['idle_timeout','ping_timeout'])n['http_'+k]=seconds(v[k]);
+    else if(mapping[k])fields(n,{[k]:v[k]},mapping);
+    else warn?.('transport.'+k);
    }continue;
   }
-  die(input.type+'.'+key+': field is not supported by the node form yet');
+  warn?.(key);
  }
  // Hysteria prefers a nonempty auth_str, independent of JSON field order.
  if(input.type==='hysteria' && (input.auth_str || input.auth)){
@@ -121,17 +124,42 @@ export function importNode(input, resolve) {
  }
  return n;
 };
-export function importNodes(config, source) {
+export function importNodes(config, source, warn) {
  const all=[...(config.outbounds || []),...(config.endpoints || [])], tags={}, seen={};
+ // Keep explicit block outbounds when a group needs them. Standalone routing
+ // policy outbounds stay out of the subscription node library.
+ const groupMembers={};
+ for(let input in all)
+  if(input.type in ['selector','urltest'] && type(input.outbounds)==='array')
+   for(let tag in input.outbounds)groupMembers[tag]=true;
+ const importable=input=>input.type in supported || (input.type==='block' && groupMembers[input.tag]);
  for(let input in all){
   if(!input.tag || !input.type || seen[input.tag])die('Missing type/tag or duplicate outbound/endpoint tag');
   seen[input.tag]=true;
-  tags[input.tag]=input.type in supported ? nodeID(source,input.tag) : null;
+  tags[input.tag]=importable(input) ? nodeID(source,input.tag) : null;
   if(input.type==='tailscale')die('Tailscale endpoints must be configured locally; subscriptions cannot manage router services');
  }
- const inputs=filter(all,input=>input.type in supported);
+ const inputs=filter(all,importable);
  const resolve=t=>{if(!tags[t])die('Missing group member or detour: '+t);return tags[t];};
- const nodes=map(inputs,input=>{const n=importNode(input,resolve);n.node_id=tags[input.tag];return n;});
+ const declaredDNS={}, usedDNS={};
+ for(let server in config.dns?.servers || [])
+  if(server.tag)declaredDNS[server.tag]=true;
+ const nodes=map(inputs,input=>{
+  const resolver=input.domain_resolver;
+  let nodeInput=input;
+  if(resolver){
+   const server=type(resolver)==='string' ? resolver : resolver.server;
+   if(!declaredDNS[server])die('Outbound '+input.tag+' references an undeclared DNS resolver: '+server);
+   usedDNS[server]=true;
+   nodeInput={...input};
+   delete nodeInput.domain_resolver;
+   warn?.('domain_resolver (using HomeProxy DNS)');
+  }
+  const n=importNode(nodeInput,resolve,warn);
+  if(resolver?.strategy)n.node_domain_strategy=value(resolver.strategy);
+  n.node_id=tags[input.tag];
+  return n;
+ });
  const byid={};for(let n in nodes)byid[n.node_id]=n;
  const visiting={},done={};
  function visit(id){if(visiting[id])die('Circular group/detour dependency');if(done[id])return;visiting[id]=true;const n=byid[id];for(let dep in [...(n.group_nodes || []),...(n.node_detour?[n.node_detour]:[])])visit(dep);delete visiting[id];done[id]=true;}
@@ -140,9 +168,12 @@ export function importNodes(config, source) {
  const directory=(getenv('HP_OUTPUT_DIR') || '/var/run/homeproxy')+'/node-import';
  mkdir(directory,0700);
  const file=directory+'/'+md5(source)+'.json';
- const outbounds=filter(config.outbounds || [],input=>input.type in supported);
- const endpoints=filter(config.endpoints || [],input=>input.type in supported);
- writefile(file,sprintf('%J',{outbounds,endpoints,dns:{servers:[{type:'local',tag:'hp-import-resolver'}]},route:{default_domain_resolver:'hp-import-resolver'}}));chmod(file,0600);
+ const outbounds=filter(config.outbounds || [],importable);
+ const endpoints=filter(config.endpoints || [],importable);
+ let defaultResolver='hp-import-resolver';
+ while(usedDNS[defaultResolver])defaultResolver+='-local';
+ const servers=map([defaultResolver,...keys(usedDNS)],tag=>({type:'local',tag}));
+ writefile(file,sprintf('%J',{outbounds,endpoints,dns:{servers},route:{default_domain_resolver:defaultResolver}}));chmod(file,0600);
  const result=system('sing-box check -c '+file+' >/dev/null 2>&1');unlink(file);
  if(result)die('Native nodes failed core validation; check protocol options and core capabilities');
  return nodes;

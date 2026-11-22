@@ -3341,10 +3341,10 @@ msgid "Cancelling after the current stage…"
 msgstr "将在当前阶段结束后取消…"
 
 msgid "Connected"
-msgstr ""
+msgstr "已连接"
 
 msgid "Connecting"
-msgstr ""
+msgstr "连接中"
 
 msgid "Connecting to the core…"
 msgstr "正在连接核心…"
@@ -3353,7 +3353,7 @@ msgid "Connection details"
 msgstr "连接详情"
 
 msgid "Connections"
-msgstr ""
+msgstr "连接"
 
 msgid "Core DNS · HTTPS"
 msgstr "核心 DNS · HTTPS"
@@ -3374,10 +3374,10 @@ msgid "Current transfer rate"
 msgstr "当前传输速率"
 
 msgid "Destination"
-msgstr ""
+msgstr "目标"
 
 msgid "Details"
-msgstr ""
+msgstr "详情"
 
 msgid "Diagnosis finished"
 msgstr "诊断结束"
@@ -3392,13 +3392,13 @@ msgid "Display paused; new messages are still received."
 msgstr "已暂停显示，仍在接收新日志。"
 
 msgid "Download"
-msgstr ""
+msgstr "下载"
 
 msgid "Enter a domain or URL to inspect DNS, HTTP connectivity and routing."
 msgstr "输入域名或网址，检查 DNS、HTTP 连通性和路由。"
 
 msgid "Groups"
-msgstr ""
+msgstr "分组"
 
 msgid "Inbound / outbound"
 msgstr "入站／出站"
@@ -3407,16 +3407,16 @@ msgid "Live display"
 msgstr "实时显示"
 
 msgid "Log level"
-msgstr ""
+msgstr "日志级别"
 
 msgid "Logs"
-msgstr ""
+msgstr "日志"
 
 msgid "Memory"
-msgstr ""
+msgstr "内存"
 
 msgid "Next"
-msgstr ""
+msgstr "下一页"
 
 msgid "No active connections. New connections will appear here automatically."
 msgstr "当前没有活动连接。新连接将自动显示在这里。"
@@ -3431,7 +3431,7 @@ msgid "No outbound groups. A configuration using a single node may not create gr
 msgstr "当前没有出站组。使用单个节点的配置可能不会创建出站组。"
 
 msgid "Not running"
-msgstr ""
+msgstr "未运行"
 
 msgid "Observability pages"
 msgstr "观测页面"
@@ -3440,16 +3440,16 @@ msgid "Operation completed."
 msgstr "操作已完成。"
 
 msgid "Page"
-msgstr ""
+msgstr "页码"
 
 msgid "Previous"
-msgstr ""
+msgstr "上一页"
 
 msgid "Proxy HTTP connection"
 msgstr "代理 HTTP 连接"
 
 msgid "Refresh"
-msgstr ""
+msgstr "刷新"
 
 msgid "Router HTTP connection"
 msgstr "路由器 HTTP 连接"
@@ -3458,19 +3458,19 @@ msgid "Routing configuration"
 msgstr "路由配置"
 
 msgid "Running"
-msgstr ""
+msgstr "运行中"
 
 msgid "Running…"
-msgstr ""
+msgstr "运行中…"
 
 msgid "Select"
-msgstr ""
+msgstr "选择"
 
 msgid "Selected"
-msgstr ""
+msgstr "已选择"
 
 msgid "Source"
-msgstr ""
+msgstr "来源"
 
 msgid "System DNS · HTTPS"
 msgstr "系统 DNS · HTTPS"
@@ -3485,7 +3485,7 @@ msgid "System environment"
 msgstr "系统环境"
 
 msgid "Upload"
-msgstr ""
+msgstr "上传"
 
 msgid "Waiting for connections…"
 msgstr "正在等待连接…"
@@ -3494,7 +3494,7 @@ msgid "Waiting for log messages…"
 msgstr "正在等待日志…"
 
 msgid "connections"
-msgstr ""
+msgstr "条连接"
 
 msgid "A profile name is required."
 msgstr "请输入配置名称。"
@@ -4415,3 +4415,227 @@ msgstr "Host 请求头"
 
 msgid "Expecting a valid HTTP Host, optionally including a port."
 msgstr "请输入有效的 HTTP Host，可包含端口。"
+
+#: observability.js
+msgid "Connection data unavailable"
+msgstr "无法获取连接数据"
+
+#: observability.js
+msgid "Core log"
+msgstr "核心日志"
+
+#: observability.js
+msgid "Current active connections"
+msgstr "当前活跃连接"
+
+#: observability.js
+msgid "Display paused."
+msgstr "显示已暂停。"
+
+#: observability.js
+msgid "Duration"
+msgstr "持续时间"
+
+#: observability.js
+msgid "Failed"
+msgstr "失败"
+
+#: observability.js
+msgid "HomeProxy log"
+msgstr "HomeProxy 维护日志"
+
+#: observability.js
+msgid "Latency test completed."
+msgstr "测速完成。"
+
+#: observability.js
+msgid "Loading…"
+msgstr "加载中…"
+
+#: observability.js
+msgid "Log source"
+msgstr "日志来源"
+
+#: observability.js
+msgid "Main UDP outbound"
+msgstr "UDP 主出站"
+
+#: observability.js
+msgid "Main outbound"
+msgstr "主出站"
+
+#: observability.js
+msgid "No closed connections recorded on this page yet."
+msgstr "本页尚未记录已关闭的连接。"
+
+#: observability.js
+msgid "No connections have been reported by this core."
+msgstr "核心尚未报告任何连接。"
+
+#: observability.js
+msgid "Rule"
+msgstr "规则"
+
+#: observability.js
+msgid "The paired core must be running with Clash API enabled. Check API settings and the HomeProxy log."
+msgstr "需要运行支持 Clash API 的核心。请检查 API 设置和 HomeProxy 日志。"
+
+#: observability.js
+msgid "This closes all active connections in the selected core instance."
+msgstr "关闭当前核心实例的所有活动连接。"
+
+#: observability.js
+msgid "Total"
+msgstr "总计"
+
+#: observability.js
+msgid "Total: —"
+msgstr "总计：—"
+
+#: observability.js
+msgid "Traffic"
+msgstr "流量"
+
+#: observability.js
+msgid "Unable to clean log."
+msgstr "无法清空日志。"
+
+#: observability.js
+msgid "lines"
+msgstr "行"
+
+#: observe-settings.js
+msgid "Enter trusted Dashboard origins, for example https://metacubex.github.io. Browser HTTPS and local-network permissions still apply."
+msgstr "填写受信任的 Dashboard 来源，例如 https://metacubex.github.io。浏览器仍会检查 HTTPS 和本地网络访问权限。"
+
+#: observe-settings.js
+msgid "Local monitoring uses an internal Clash API automatically. Applying connection settings restarts HomeProxy."
+msgstr "本地监控自动使用内部 Clash API。应用连接设置会重启 HomeProxy。"
+
+#: observe-settings.js
+msgid "Enable sing-box gRPC API"
+msgstr "启用 sing-box gRPC API"
+
+#: observe-settings.js
+msgid "Allows the official sing-box clients and Dashboard to connect directly with the API secret."
+msgstr "允许 sing-box 官方客户端和 Dashboard 使用 API 密钥直连。"
+
+#: observe-settings.js
+msgid "sing-box gRPC address"
+msgstr "sing-box gRPC 地址"
+
+#: observe-settings.js
+msgid "The address appears after applying settings and starting this instance."
+msgstr "应用设置并启动此实例后显示地址。"
+
+#: observe-settings.js
+msgid "Open official sing-box Dashboard"
+msgstr "打开 sing-box 官方 Dashboard"
+
+#: observe-settings.js
+msgid "Allow LAN API access"
+msgstr "允许局域网访问 API"
+
+#: observe-settings.js
+msgid "Enabled APIs listen on the LAN address. The default listen address is 127.0.0.1."
+msgstr "开启后，已启用的 API 监听局域网地址。默认监听地址为 127.0.0.1。"
+
+#: observe-settings.js
+msgid "Enter trusted Dashboard origins. The default origins are MetaCubeXD for Clash and the official sing-box Dashboard for gRPC."
+msgstr "填写受信任的 Dashboard 来源。Clash API 默认允许 MetaCubeXD，gRPC API 默认允许 sing-box 官方 Dashboard。"
+
+#: observe-settings.js
+msgid "Client gRPC port"
+msgstr "客户端 gRPC 端口"
+
+#: observe-settings.js
+msgid "Server gRPC port"
+msgstr "服务端 gRPC 端口"
+
+#: observe-settings.js
+msgid "API ports must be distinct."
+msgstr "API 端口不能重复。"
+
+#: observe-settings.js
+msgid "gRPC TLS certificate path"
+msgstr "gRPC TLS 证书路径"
+
+#: observe-settings.js
+msgid "gRPC TLS private key path"
+msgstr "gRPC TLS 私钥路径"
+
+#: observe-settings.js
+msgid "Client log level"
+msgstr "客户端日志级别"
+
+#: observe-settings.js
+msgid "Server log level"
+msgstr "服务端日志级别"
+
+#: observe-settings.js
+msgid "Info records core startup and connection activity. Warn records warnings and errors."
+msgstr "info 记录核心启动和连接活动。warn 记录警告和错误。"
+
+#: observability.js
+msgid "Unable to read the current connections."
+msgstr "无法读取当前连接。"
+
+#: observability.js
+msgid "No active connections. Traffic through this instance appears here while the connection is open."
+msgstr "当前没有活动连接。经过此实例且仍处于打开状态的连接会显示在这里。"
+
+#: observability.js
+msgid "Core log level"
+msgstr "核心日志级别"
+
+#: observability.js
+msgid "Unable to read the log."
+msgstr "无法读取日志。"
+
+#: observability.js
+msgid "Default route"
+msgstr "默认路由"
+
+#: observe-settings.js
+msgid "Serve the official Dashboard locally"
+msgstr "在本机托管官方 Dashboard"
+
+#: observe-settings.js
+msgid "Open the Dashboard directly from LuCI using this instance’s connection settings."
+msgstr "从 LuCI 直接打开 Dashboard，并使用此实例的连接设置。"
+
+#: observe-settings.js
+msgid "Open sing-box Dashboard"
+msgstr "打开 sing-box Dashboard"
+
+#: observe-settings.js
+msgid "Unable to open the sing-box Dashboard."
+msgstr "无法打开 sing-box Dashboard。"
+
+#: observability.js
+msgid "connection"
+msgstr "条连接"
+
+#: observability.js
+msgid "line"
+msgstr "行"
+
+#: observability.js
+msgid "Unavailable"
+msgstr "不可用"
+
+#: node.js
+msgid "Connect to this proxy through the selected outbound."
+msgstr "通过所选出站连接此代理。"
+
+#: node.js
+msgid "Server address resolver"
+msgstr "服务器地址解析器"
+
+#: node.js
+msgid "Server address strategy"
+msgstr "服务器地址策略"
+
+#: node.js
+msgid "Used for a direct connection to the proxy server. Dial fields such as interface binding are ignored when an upstream is set."
+msgstr "用于直连代理服务器。设置上游后，接口绑定等拨号字段将被忽略。"

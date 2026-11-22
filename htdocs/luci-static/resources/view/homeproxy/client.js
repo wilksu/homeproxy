@@ -88,25 +88,19 @@ return view.extend({
 		    hosts = data[2]?.hosts;
 
 		/* Cache source titles and configured proxy nodes once for all selectors. */
-		const sourceByID = Object.create(null), sourceByHash = Object.create(null);
-		for (const source of hp.getSubscriptionInfo(data[0])) {
-			if (source.id) sourceByID[source.id] = source;
+		const sourceByHash = Object.create(null);
+		for (const source of hp.getSubscriptionInfo(data[0]))
 			sourceByHash[source.hash] = source;
-		}
 		let proxy_nodes = Object.create(null);
 		uci.sections(data[0], 'node', (res) => {
-			const isReference=res.node_mode==='reference';
-			let inherited=res, seen=new Set();
-			while(inherited.node_mode==='reference' && !seen.has(inherited['.name'])){seen.add(inherited['.name']);const base=uci.get(data[0],inherited.node_base);if(!base)break;inherited=base;}
-			if(isReference)res={...inherited,'.name':res['.name'],label:res.label,type:inherited.type || _('Reference')};
 			let nodeaddr = ((res.type === 'direct') ? res.override_address : res.address) || '',
 			    nodeport = ((res.type === 'direct') ? res.override_port : res.port) || '';
 
 			proxy_nodes[res['.name']] =
-				String.format('[%s] %s', isReference ? _('Reference')+' · '+res.type : res.type, res.label || ((stubValidator.apply('ip6addr', nodeaddr) ?
+				String.format('[%s] %s', res.type, res.label || ((stubValidator.apply('ip6addr', nodeaddr) ?
 					String.format('[%s]', nodeaddr) : nodeaddr) + ':' + nodeport));
 			if(res.label && nodeaddr)proxy_nodes[res['.name']]+=' ('+nodeaddr+(nodeport?':'+nodeport:'')+')';
-			const source = res.source_id ? sourceByID[res.source_id] : sourceByHash[res.grouphash];
+			const source = sourceByHash[res.grouphash];
 			if (source)
 				proxy_nodes[res['.name']] += ' — ' + (source.configured ? source.title : _('Removed') + ' · ' + source.title);
 

@@ -31,23 +31,39 @@ class ValidationTests(unittest.TestCase):
    return subprocess.run([UCODE, '-L', str(tmp / '*.uc'), str(script), *files], capture_output=True, text=True)
 
  def test_wrong_version_is_rejected(self):
-  result = self.check('sing-box version 1.12.25', [{}])
-  self.assertNotEqual(result.returncode, 0)
-  self.assertIn('requires sing-box 1.14.0', result.stderr)
+  for bad in ['sing-box version 1.12.25', 'sing-box version 1.15.0',
+              'sing-box version 1.14.invalid', 'sing-box version 1.14.0-beta.1']:
+   with self.subTest(version=bad):
+    result = self.check(bad, [{}])
+    self.assertNotEqual(result.returncode, 0)
+    self.assertIn('requires sing-box 1.14.x', result.stderr)
 
  def test_each_required_build_tag_is_checked(self):
   config = {'outbounds': [{'type': 'hysteria2', 'tag': 'node', 'tls': {'utls': {'enabled': True}}}]}
   result = self.check('sing-box version 1.14.0\nTags: with_utls', [config])
   self.assertNotEqual(result.returncode, 0)
   self.assertIn('lacks with_quic', result.stderr)
+  clash = {'experimental': {'clash_api': {'external_controller': '127.0.0.1:5334'}}}
+  result = self.check('sing-box version 1.14.0\nTags: with_utls', [clash])
+  self.assertNotEqual(result.returncode, 0)
+  self.assertIn('lacks with_clash_api', result.stderr)
 
  def test_cross_instance_api_port_collision_is_rejected(self):
   result = self.check('sing-box version 1.14.0', [
-   {'services': [{'type': 'api', 'tag': 'api', 'listen': '127.0.0.1', 'listen_port': 5334}]},
+   {'experimental': {'clash_api': {'external_controller': '127.0.0.1:5334'}}},
    {'inbounds': [{'type': 'mixed', 'tag': 'mixed', 'listen': '::', 'listen_port': 5334}]}])
   self.assertNotEqual(result.returncode, 0)
   self.assertIn('conflicts', result.stderr)
 
+ def test_clash_and_native_api_cannot_share_a_listener(self):
+  result = self.check('sing-box version 1.14.0', [{
+   'experimental': {'clash_api': {'external_controller': '127.0.0.1:5334'}},
+   'services': [{'type':'api', 'tag':'homeproxy-grpc', 'listen':'127.0.0.1', 'listen_port':5334}]}])
+  self.assertNotEqual(result.returncode, 0)
+  self.assertIn('conflicts', result.stderr)
+
  def test_valid_pairing_passes(self):
-  result = self.check('sing-box version 1.14.0', [{}])
-  self.assertEqual(result.returncode, 0, result.stderr)
+  for version in ['sing-box version 1.14.0', 'sing-box version 1.14.4']:
+   with self.subTest(version=version):
+    result = self.check(version, [{}])
+    self.assertEqual(result.returncode, 0, result.stderr)
